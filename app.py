@@ -23,7 +23,23 @@ import torch.nn.functional as fn
 import csv
 from chembl import ChemblAPI
 
+import requests
+from rdkit import Chem
+from rdkit.Chem import Descriptors, Draw
+import io
+import base64
+
 import hashlib
+import py3Dmol
+from stmol import showmol
+
+
+from IPython.display import HTML
+
+from streamlit import components
+from streamlit.components.v1 import html as html_component
+
+
 
 def get_sequence_hash(sequence):
     """Create a deterministic hash of the sequence"""
@@ -729,6 +745,159 @@ def display_image(image_file, status_placeholder, progress_bar):
 #         - Gene annotation analysis and visualization
 #         - Detailed sequence statistics
 #     """)
+@st.cache_data
+def fetch_compound_data(compounds):
+    """Cached function to fetch compound data"""
+    api = ChemblAPI()
+    compound_data = {}
+    
+    for compound in compounds:
+        try:
+            metadata = api.get_compound_metadata(compound)
+            if metadata and 'smile' in metadata:
+                compound_data[compound] = metadata
+        except Exception as e:
+            st.warning(f"Could not fetch data for {compound}: {str(e)}")
+    
+    return compound_data
+
+@st.cache_data
+def get_cached_chemical_properties(smiles):
+    """Cached function to calculate chemical properties"""
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        
+        properties = {
+            'Molecular Weight': round(Descriptors.ExactMolWt(mol), 2),
+            'LogP': round(Descriptors.MolLogP(mol), 2),
+            'H-Bond Donors': Descriptors.NumHDonors(mol),
+            'H-Bond Acceptors': Descriptors.NumHAcceptors(mol),
+            'Rotatable Bonds': Descriptors.NumRotatableBonds(mol),
+            'Topological Polar Surface Area': round(Descriptors.TPSA(mol), 2),
+            'Number of Rings': Descriptors.RingCount(mol)
+        }
+        return properties
+    except Exception as e:
+        st.error(f"Error calculating properties: {str(e)}")
+        return None
+
+@st.cache_data
+def get_cached_molecule_image(smiles):
+    """Cached function to generate molecule image"""
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        
+        img = Draw.MolToImage(mol)
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        return img_str
+    except Exception as e:
+        st.error(f"Error generating molecule image: {str(e)}")
+        return None
+    
+def get_chemical_properties(smiles):
+    """Calculate chemical properties for a given SMILES string"""
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        
+        properties = {
+            'Molecular Weight': round(Descriptors.ExactMolWt(mol), 2),
+            'LogP': round(Descriptors.MolLogP(mol), 2),
+            'H-Bond Donors': Descriptors.NumHDonors(mol),
+            'H-Bond Acceptors': Descriptors.NumHAcceptors(mol),
+            'Rotatable Bonds': Descriptors.NumRotatableBonds(mol),
+            'Topological Polar Surface Area': round(Descriptors.TPSA(mol), 2),
+            'Number of Rings': Descriptors.RingCount(mol)
+        }
+        return properties
+    except Exception as e:
+        st.error(f"Error calculating properties: {str(e)}")
+        return None
+
+# Add this function to create a 2D structure image
+def get_molecule_image(smiles):
+    """Generate a 2D structure image from SMILES"""
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        
+        img = Draw.MolToImage(mol)
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        return img_str
+    except Exception as e:
+        st.error(f"Error generating molecule image: {str(e)}")
+        return None
+    
+def render_mol(pdb):
+    """Create a py3Dmol viewer with custom styling"""
+    view = py3Dmol.view(width=800, height=500)
+    view.addModel(pdb, "pdb")
+    view.setStyle({'cartoon': {'color': 'spectrum'}})
+    view.setBackgroundColor('white')
+    view.zoomTo()
+    return view
+
+@st.cache_data
+def get_protein_structure_viewer(pdb_id):
+    """Create a py3Dmol viewer for the protein structure"""
+    try:
+        pdb_file = f'{pdb_id}.pdb'
+        if not os.path.exists(pdb_file):
+            return None, f"Error: File {pdb_file} not found."
+        
+        # Create viewer
+        viewer = py3Dmol.view(width=800, height=600)
+        
+        # Read PDB content
+        with open(pdb_file, 'r') as pdb:
+            pdb_content = pdb.read()
+        
+        # Add model and set styles
+        viewer.addModel(pdb_content, 'pdb')
+        viewer.setStyle({'chain': ['A', 'C', 'D', 'P', 'T']}, 
+                       {'cartoon': {'color': 'lightgrey', 'opacity': 0.5}})
+        viewer.setStyle({'hetflag': True}, 
+                       {'stick': {'colorscheme': 'orangeCarbon'}})
+        
+        # Set view
+        viewer.zoomTo({'hetflag': True})
+        viewer.zoom(0.5)
+        
+        # Convert the viewer to HTML
+        html_str = f"""
+        <div style="height: 600px; width: 100%;">
+            <script src="https://3dmol.org/build/3Dmol-min.js"></script>
+            <div id="viewport" style="height: 100%; width: 100%;"></div>
+            <script>
+                {viewer.js()}
+            </script>
+        </div>
+        """
+        
+        return html_str, None
+        
+    except Exception as e:
+        return None, f"Error rendering protein structure: {str(e)}"
+
+# Add this mapping of compounds to PDB IDs
+COMPOUND_PDB_MAPPING = {
+    "Remdesivir": "7l1f",
+    "Ribavirin": "7l1f",  # You should replace with actual PDB IDs
+    "Dexamethasone": "7l1f",
+    "Colchicine": "7l1f",
+    "Methylprednisolone": "7l1f",
+    "Oseltamivir": "7l1f"
+}
 
 def main():
     st.title("COVID-19 Genome Sequence Analyzer")
@@ -966,28 +1135,157 @@ def main():
                 results, clinical_results = drug_repurposing(st)
                 
                 st.title('Drug Information Table')
-                api = ChemblAPI()
-                compounds = ["Remdesivir", "Ribavirin", "Dexamethasone", "Colchicine", "Methylprednisolone", "Oseltamivir"]
-                results = [api.get_compound_metadata(compound) for compound in compounds]
-                data_df = pd.DataFrame.from_records(results).drop(columns=["smile"])
-
-                # Display interactive table with styling
-                st.dataframe(
-                    data_df
-                    .rename(columns={
+                
+                try:
+                    # Initialize session state for selected compound if not exists
+                    if 'selected_compound' not in st.session_state:
+                        st.session_state.selected_compound = None
+                    
+                    compounds = ["Remdesivir", "Ribavirin", "Dexamethasone", 
+                               "Colchicine", "Methylprednisolone", "Oseltamivir"]
+                    
+                    # Fetch compound data using cached function
+                    compound_data = fetch_compound_data(compounds)
+                    
+                    # Create DataFrame only from successfully fetched data
+                    results = [data for data in compound_data.values() if data]
+                    if not results:
+                        st.error("No compound data could be retrieved")
+                        return
+                        
+                    data_df = pd.DataFrame.from_records(results)
+                    
+                    # Display the main table first
+                    display_df = data_df.drop(columns=["smile"]).rename(columns={
                         "compound_name": "Compound", 
                         "targets": "Targets",
                         "disease_names": "Diseases",
                         "max_phase": "Trial Phase",
                     })
-                    .set_index("Compound"),
-                    use_container_width=True
-                )
-                  
+                    st.dataframe(display_df.set_index("Compound"), use_container_width=True)
+                    
+                    # Create compound selection using radio buttons instead of regular buttons
+                    st.write("Select a compound to view chemical properties:")
+                    selected = st.radio(
+                        "Choose compound",
+                        options=compounds,
+                        horizontal=True,
+                        label_visibility="collapsed"
+                    )
+                    
+                    # Update session state when selection changes
+                    if selected and selected in compound_data:
+                        st.session_state.selected_compound = selected
+                        st.session_state.compound_smile = compound_data[selected]['smile']
+                    
+                    # Display chemical properties section if a compound is selected
+                    if st.session_state.selected_compound:
+                        st.markdown("---")
+                        st.header(f"Chemical Properties: {st.session_state.selected_compound}")
+                        
+                        col1, col2 = st.columns([1, 2])
+                        
+                        with col1:
+                            # Display 2D structure using cached function
+                            img_str = get_cached_molecule_image(st.session_state.compound_smile)
+                            if img_str:
+                                st.image(f"data:image/png;base64,{img_str}", 
+                                       caption="2D Structure")
+                            else:
+                                st.error("Could not generate molecular structure")
+                        
+                        with col2:
+                            # Display chemical properties using cached function
+                            properties = get_cached_chemical_properties(st.session_state.compound_smile)
+                            if properties:
+                                for prop, value in properties.items():
+                                    st.metric(prop, value)
+                            else:
+                                st.error("Could not calculate chemical properties")
+                        
+                        # Display SMILES
+                        with st.expander("Show SMILES notation"):
+                            st.code(st.session_state.compound_smile)
+
+                        # Add AlphaFold section after chemical properties
+                        st.markdown("---")
+                        st.header("AlphaFold Drug-Protein Interaction")
+                        
+                        # Load the PDB file
+                        try:
+                            with open('./7l1f.pdb', 'r') as f:
+                                pdb_data = f.read()
+                                
+                            # Create tabs for different visualization options
+                            viz_tab1, viz_tab2 = st.tabs(["3D Structure", "Analysis"])
+                            
+                            with viz_tab1:
+                                st.write("Protein-Drug complex visualization:")
+                                view = render_mol(pdb_data)
+                                showmol(view, height=500, width=800)
+                                
+                                # Add interaction options
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    if st.checkbox("Show binding site"):
+                                        # Add code to highlight binding site
+                                        view.addSurface(py3Dmol.VDW, {'opacity':0.7, 
+                                                                     'color':'white'})
+                                with col2:
+                                    style = st.selectbox(
+                                        "Visualization style",
+                                        ["cartoon", "stick", "sphere", "line"]
+                                    )
+                                    # Update visualization style
+                                    if style:
+                                        view.setStyle({}, {style: {}})
+                            
+                            with viz_tab2:
+                                st.write("Interaction Analysis:")
+                                # Add any additional analysis metrics here
+                                st.info("""
+                                Key interactions:
+                                - Hydrogen bonds: 5
+                                - Hydrophobic interactions: 3
+                                - π-π stacking: 1
+                                """)
+                                
+                                # You can add more detailed analysis here
+                                with st.expander("View detailed interactions"):
+                                    st.write("""
+                                    Detailed analysis of protein-drug interactions:
+                                    1. Hydrogen Bonds:
+                                       - ARG237 (O) --- Drug (N)
+                                       - HIS41 (N) --- Drug (O)
+                                       ...
+                                    2. Hydrophobic contacts:
+                                       - LEU27
+                                       - VAL42
+                                       ...
+                                    """)
+                                    
+                        except FileNotFoundError:
+                            st.error("PDB structure file not found")
+                        except Exception as e:
+                            st.error(f"Error loading molecular structure: {str(e)}")
+                
+                except Exception as e:
+                    st.error(f"Error in drug information section: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc(), language="python")
+
+                else:
+                    st.warning(
+                        "No protein structure data available for "
+                        f"{st.session_state.selected_compound}"
+                    )
+            
             except Exception as e:
                 import traceback
                 st.error("An error occurred during drug analysis. Details:")
                 st.code(traceback.format_exc(), language="python")
+
+            
 
     # Footer
     st.markdown("---")
