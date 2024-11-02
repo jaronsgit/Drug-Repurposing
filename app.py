@@ -948,30 +948,74 @@ def main():
                         try:
                             with open('./7l1f.pdb', 'r') as f:
                                 pdb_data = f.read()
-                                
+
                             # Create tabs for different visualization options
                             viz_tab1, viz_tab2 = st.tabs(["3D Structure", "Analysis"])
-                            
+
                             with viz_tab1:
                                 st.write("Protein-Drug complex visualization:")
-                                view = render_mol(pdb_data)
-                                showmol(view, height=500, width=800)
+
+                                # Initialize the 3D viewer
+                                view = py3Dmol.view(width=800, height=500)
+                                view.addModel(pdb_data, 'pdb')
                                 
+                                # Default styles for chains and heteroatoms
+                                view.setStyle({'chain': ['A', 'C', 'D', 'P', 'T']}, 
+                                            {'cartoon': {'color': 'lightgrey', 'opacity': 0.5}})
+                                view.setStyle({'hetflag': True}, {'stick': {'colorscheme': 'orangeCarbon'}})
+                                
+                                # Zoom settings
+                                view.zoomTo({'hetflag': True})
+                                view.zoom(0.5)
+
+                                # Display the model
+                                showmol(view, height=500, width=800)
+
                                 # Add interaction options
                                 col1, col2 = st.columns(2)
+                                
                                 with col1:
                                     if st.checkbox("Show binding site"):
-                                        # Add code to highlight binding site
-                                        view.addSurface(py3Dmol.VDW, {'opacity':0.7, 
-                                                                     'color':'white'})
+                                        # Highlight the binding site
+                                        view.addSurface(py3Dmol.VDW, {'opacity': 0.7, 'color': 'white'})
+
                                 with col2:
                                     style = st.selectbox(
                                         "Visualization style",
                                         ["cartoon", "stick", "sphere", "line"]
                                     )
-                                    # Update visualization style
+                                    # Update visualization style based on user selection
                                     if style:
                                         view.setStyle({}, {style: {}})
+                                        
+                                # Re-render after making updates
+                                view.render()
+                                with open('./7l1f.pdb', 'r') as f:
+                                    pdb_data = f.read()
+                                    
+                                # Create tabs for different visualization options
+                                viz_tab1, viz_tab2 = st.tabs(["3D Structure", "Analysis"])
+                            
+                            # with viz_tab1:
+                            #     st.write("Protein-Drug complex visualization:")
+                            #     view = render_mol(pdb_data)
+                            #     showmol(view, height=500, width=800)
+                                
+                            #     # Add interaction options
+                            #     col1, col2 = st.columns(2)
+                            #     with col1:
+                            #         if st.checkbox("Show binding site"):
+                            #             # Add code to highlight binding site
+                            #             view.addSurface(py3Dmol.VDW, {'opacity':0.7, 
+                            #                                          'color':'white'})
+                            #     with col2:
+                            #         style = st.selectbox(
+                            #             "Visualization style",
+                            #             ["cartoon", "stick", "sphere", "line"]
+                            #         )
+                            #         # Update visualization style
+                            #         if style:
+                            #             view.setStyle({}, {style: {}})
                             
                             with viz_tab2:
                                 st.write("Interaction Analysis:")
