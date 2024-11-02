@@ -216,7 +216,7 @@ def get_top_unique_species(metadata, n=5):
                     .head(n))
     
     return top_species[['species', 'identity']]
-
+    
 def create_phylogenetic_tree(query_sequence, similar_sequences):
     """Create phylogenetic tree using Biopython's built-in tools"""
     try:
@@ -633,32 +633,16 @@ COMPOUND_PDB_MAPPING = {
 }
 
 def main():
-    st.title("COVID-19 Genome Sequence Analyzer")
-    st.write("Upload or paste a FASTA file containing COVID-19 genome sequence")
+    st.title("SeqCure")
+    st.write("Upload or paste a FASTA file containing a viral genome sequence")
 
     # Add debug mode checkbox
     debug_mode = st.sidebar.checkbox("Debug Mode", value=True)
     if debug_mode:
         st.sidebar.info("Debug Mode: Using cached BLAST results when available")
 
-    # NEW: Create a container for consistent styling
-    input_container = st.container()
-    
-    # CHANGED: Use container's columns instead of direct st.columns
-    col1, col2 = input_container.columns(2)
-    
-    # NEW: Added style for consistent boxes
-    box_style = """
-    <style>
-        .stFileUploader > div > div > div {
-            min-height: 200px;
-        }
-        .uploadedFile {
-            height: 200px;
-        }
-    </style>
-    """
-    st.markdown(box_style, unsafe_allow_html=True)
+    # Input methods
+    col1, col2 = st.columns(2)
     
     with col1:
         st.subheader("Upload FASTA File")
@@ -666,8 +650,7 @@ def main():
         
     with col2:
         st.subheader("Or Paste FASTA Sequence")
-        # CHANGED: Height adjusted to 167 from 200
-        pasted_sequence = st.text_area("Paste your FASTA sequence here", height=70)
+        pasted_sequence = st.text_area("Paste your FASTA sequence here", height=200)
 
     # Process input
     sequence_data = None
@@ -721,19 +704,28 @@ def main():
                         
                         # Create results tabs
                         tab1, tab2, tab3, tab4 = st.tabs([
-                            "Phylogenetic Tree",
-                            "Similar Sequences",
                             "Sequence Analysis",
+                            "Similar Sequences",
+                            "Phylogenetic Tree",
                             "Raw Data"
                         ])
-                        
+
                         with tab1:
-                            st.subheader("Phylogenetic Tree of Related Viruses")
-                            if tree_fig:
-                                st.pyplot(tree_fig)
-                            else:
-                                st.error("Could not generate phylogenetic tree")
-                        
+                            st.subheader("Sequence Analysis")
+                            frequencies = calculate_nucleotide_freq(str(sequence_data.seq))
+                            
+                            freq_df = pd.DataFrame({
+                                'Nucleotide': list(frequencies.keys()),
+                                'Frequency (%)': list(frequencies.values())
+                            })
+                            
+                            fig = px.bar(freq_df, x='Nucleotide', y='Frequency (%)',
+                                        title='Nucleotide Distribution',
+                                        color='Nucleotide')
+                            st.plotly_chart(fig)
+                            
+                            st.metric("GC Content", f"{gc_content(str(sequence_data.seq)):.2f}%")
+
                         with tab2:
                             st.subheader("Similar Viral Sequences")
                             df = pd.DataFrame(metadata)
@@ -763,20 +755,11 @@ def main():
                                 )
                         
                         with tab3:
-                            st.subheader("Sequence Analysis")
-                            frequencies = calculate_nucleotide_freq(str(sequence_data.seq))
-                            
-                            freq_df = pd.DataFrame({
-                                'Nucleotide': list(frequencies.keys()),
-                                'Frequency (%)': list(frequencies.values())
-                            })
-                            
-                            fig = px.bar(freq_df, x='Nucleotide', y='Frequency (%)',
-                                        title='Nucleotide Distribution',
-                                        color='Nucleotide')
-                            st.plotly_chart(fig)
-                            
-                            st.metric("GC Content", f"{gc_content(str(sequence_data.seq)):.2f}%")
+                            st.subheader("Phylogenetic Tree of Related Viruses")
+                            if tree_fig:
+                                st.pyplot(tree_fig)
+                            else:
+                                st.error("Could not generate phylogenetic tree")
                         
                         with tab4:
                             st.subheader("Raw Sequence Data")
@@ -824,18 +807,11 @@ def main():
             
             with gene_tab:
                 st.subheader("Extracted Genes")
-                # Create a clean display of genes in columns
-                col1, col2 = st.columns(2)
-                genes_per_column = len(gene_names) // 2 + len(gene_names) % 2
                 
-                with col1:
-                    for gene in gene_names[:genes_per_column]:
-                        st.markdown(f"• {gene}")
-                        
-                with col2:
-                    for gene in gene_names[genes_per_column:]:
-                        st.markdown(f"• {gene}")
-            
+                gene_df = pd.DataFrame(gene_names, columns=["Gene Names"]).set_index("Gene Names")
+                
+                st.dataframe(gene_df, use_container_width=True)
+
             with viz_tab:
                 st.subheader("Gene Visualization")
                 # Display the image
@@ -967,7 +943,7 @@ def main():
                                 pdb_data = f.read()
 
                             # Create tabs for different visualization options
-                            viz_tab1, viz_tab2 = st.tabs(["3D Structure", "Analysis"])
+                            viz_tab1, viz_tab2 = st.tabs(["3D Structure"])
 
                             with viz_tab1:
                                 st.write("Protein-Drug complex visualization:")
