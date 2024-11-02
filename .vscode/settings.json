@@ -1,0 +1,4 @@
+{
+    "ruff.lineLength": 120,
+    "editor.rulers": [120]
+}
