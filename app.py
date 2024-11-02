@@ -1011,7 +1011,7 @@ def main():
                                     pdb_data = f.read()
                                     
                                 # Create tabs for different visualization options
-                                viz_tab1, viz_tab2 = st.tabs(["3D Structure", "Analysis"])
+                                # viz_tab1, viz_tab2 = st.tabs(["3D Structure", "Analysis"])
                             
                             # with viz_tab1:
                             #     st.write("Protein-Drug complex visualization:")
@@ -1034,29 +1034,29 @@ def main():
                             #         if style:
                             #             view.setStyle({}, {style: {}})
                             
-                            with viz_tab2:
-                                st.write("Interaction Analysis:")
-                                # Add any additional analysis metrics here
-                                st.info("""
-                                Key interactions:
-                                - Hydrogen bonds: 5
-                                - Hydrophobic interactions: 3
-                                - π-π stacking: 1
-                                """)
+                            # with viz_tab2:
+                            #     st.write("Interaction Analysis:")
+                            #     # Add any additional analysis metrics here
+                            #     st.info("""
+                            #     Key interactions:
+                            #     - Hydrogen bonds: 5
+                            #     - Hydrophobic interactions: 3
+                            #     - π-π stacking: 1
+                            #     """)
                                 
-                                # You can add more detailed analysis here
-                                with st.expander("View detailed interactions"):
-                                    st.write("""
-                                    Detailed analysis of protein-drug interactions:
-                                    1. Hydrogen Bonds:
-                                       - ARG237 (O) --- Drug (N)
-                                       - HIS41 (N) --- Drug (O)
-                                       ...
-                                    2. Hydrophobic contacts:
-                                       - LEU27
-                                       - VAL42
-                                       ...
-                                    """)
+                            #     # You can add more detailed analysis here
+                            #     with st.expander("View detailed interactions"):
+                            #         st.write("""
+                            #         Detailed analysis of protein-drug interactions:
+                            #         1. Hydrogen Bonds:
+                            #            - ARG237 (O) --- Drug (N)
+                            #            - HIS41 (N) --- Drug (O)
+                            #            ...
+                            #         2. Hydrophobic contacts:
+                            #            - LEU27
+                            #            - VAL42
+                            #            ...
+                            #         """)
                                     
                         except FileNotFoundError:
                             st.error("PDB structure file not found")
@@ -1242,12 +1242,6 @@ def main():
                     st.error(f"Error in drug information section: {str(e)}")
                     import traceback
                     st.code(traceback.format_exc(), language="python")
-
-                else:
-                    st.warning(
-                        "No protein structure data available for "
-                        f"{st.session_state.selected_compound}"
-                    )
             
             except Exception as e:
                 import traceback
