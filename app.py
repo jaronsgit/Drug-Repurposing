@@ -148,4 +148,14 @@ data_df = pd.DataFrame.from_records(results).drop(columns=["smile"])
 
 
 # Display interactive table with styling
-st.dataframe(data_df.style.set_properties(**{'text-align': 'left'}))
+st.dataframe(
+    data_df
+    .rename(columns={
+        "compound_name": "Compound", 
+        "targets": "Targets",
+        "disease_names": "Diseases",
+        "max_phase": "Trial Phase",
+    })
+    .set_index("Compound"),
+    use_container_width=True
+)
