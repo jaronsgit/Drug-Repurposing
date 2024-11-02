@@ -303,7 +303,7 @@ def drug_repurposing(container):
             'Disease::MESH:D058957',
             'Disease::MESH:D006517'
         ]
-
+        time.sleep(1)
         # Step 2: Drug Database Loading
         container.info("Step 2/8: Loading drug database and treatment relationships...")
         drug_list = []
@@ -316,7 +316,7 @@ def drug_repurposing(container):
             raise Exception(f"Error loading drug database: {str(e)}")
 
         treatment = ['Hetionet::CtD::Compound:Disease','GNBR::T::Compound:Disease']
-
+        time.sleep(1)
         # Step 3: Entity Mapping
         container.info("Step 3/8: Loading and mapping drug-disease entity relationships...")
         entity_map = {}
@@ -333,7 +333,7 @@ def drug_repurposing(container):
             reader = csv.DictReader(csvfile, delimiter='\t', fieldnames=['name','id'])
             for row_val in reader:
                 relation_map[row_val['name']] = int(row_val['id'])
-    
+        time.sleep(1)
         # Step 4: ID Processing        
         container.info("Step 4/8: Processing drug and disease identifiers...")
         drug_ids = []
@@ -345,7 +345,7 @@ def drug_repurposing(container):
             disease_ids.append(entity_map[disease])
 
         treatment_rid = [relation_map[treat] for treat in treatment]
-
+        time.sleep(1)
         # Step 5: Loading Neural Network Embeddings
         container.info("Step 5/8: Loading drug-disease neural network embeddings...")
         entity_emb = np.load('./embed/DRKG_TransE_l2_entity.npy')
@@ -357,7 +357,7 @@ def drug_repurposing(container):
 
         drug_emb = th.tensor(entity_emb[drug_ids])
         treatment_embs = [th.tensor(rel_emb[rid]) for rid in treatment_rid]
-
+        time.sleep(1)
         # Step 6: Computing Drug-Disease Relationships
         container.info("Step 6/8: Computing drug-disease relationship scores using TransE model...")
         gamma = 12.0
@@ -374,7 +374,7 @@ def drug_repurposing(container):
                 score = fn.logsigmoid(transE_l2(drug_emb, treatment_emb, disease_emb))
                 scores_per_disease.append(score)
                 dids.append(drug_ids)
-        
+        time.sleep(1)
         # Step 7: Score Processing and Ranking
         container.info("Step 7/8: Ranking and prioritizing potential drug candidates...")
         scores = th.cat(scores_per_disease)
@@ -389,7 +389,7 @@ def drug_repurposing(container):
         topk_indices = np.sort(unique_indices)[:topk]
         proposed_dids = dids[topk_indices]
         proposed_scores = scores[topk_indices]
-
+        time.sleep(1)
         # Step 8: Clinical Trial Analysis
         container.info("Step 8/8: Cross-referencing with clinical trial database...")
         clinical_drugs = []
@@ -478,273 +478,6 @@ def display_image(image_file, status_placeholder, progress_bar):
     ax.axis('off')
     return fig
 
-# def main():
-#     st.title("COVID-19 Genome Sequence Analyzer")
-    
-#     # Add debug mode checkbox at the top
-#     debug_mode = st.sidebar.checkbox("Debug Mode", value=True)
-#     if debug_mode:
-#         st.sidebar.info("Debug Mode: Using cached BLAST results when available")
-#     st.write("Upload or paste a FASTA file containing COVID-19 genome sequence")
-
-#     # Input methods
-#     col1, col2 = st.columns(2)
-    
-#     with col1:
-#         st.subheader("Upload FASTA File")
-#         uploaded_file = st.file_uploader("Choose a FASTA file", type=['fasta', 'fa'])
-        
-#     with col2:
-#         st.subheader("Or Paste FASTA Sequence")
-#         pasted_sequence = st.text_area("Paste your FASTA sequence here", height=200)
-
-#     # Process input
-#     sequence_data = None
-#     fasta_analysis_complete = False
-    
-#     if uploaded_file or pasted_sequence:
-#         progress_placeholder = st.empty()
-#         status_placeholder = st.empty()
-#         progress_bar = progress_placeholder.progress(0)
-        
-#         try:
-#             # Step 1: Load and validate sequence
-#             status_placeholder.info("Step 1: Loading and validating sequence...")
-#             if uploaded_file:
-#                 content = uploaded_file.read().decode()
-#                 if validate_fasta(content):
-#                     sequence_data = next(SeqIO.parse(io.StringIO(content), "fasta"))
-#                 else:
-#                     st.error("Invalid FASTA format in uploaded file")
-                    
-#             elif pasted_sequence:
-#                 if validate_fasta(pasted_sequence):
-#                     sequence_data = next(SeqIO.parse(io.StringIO(pasted_sequence), "fasta"))
-#                 else:
-#                     st.error("Invalid FASTA format in pasted sequence")
-            
-#             if sequence_data:
-#                 # Step 2: Perform BLAST Search
-#                 progress_bar.progress(33)
-#                 status_placeholder.info("Step 2: Performing BLAST search for related viruses...")
-                
-#                 blast_results = perform_filtered_blast_search(str(sequence_data.seq))
-                
-#                 if blast_results:
-#                     progress_bar.progress(66)
-#                     status_placeholder.info("Step 3: Creating phylogenetic tree...")
-#                     similar_sequences, metadata = extract_sequences_from_blast(blast_results)
-                    
-#                     if similar_sequences:
-#                         tree_fig, alignment = create_phylogenetic_tree(sequence_data, similar_sequences)
-                        
-#                         progress_bar.progress(100)
-#                         status_placeholder.success("Analysis complete!")
-                        
-#                         # Clear progress indicators
-#                         time.sleep(1)
-#                         progress_placeholder.empty()
-#                         status_placeholder.empty()
-                        
-#                         # Display results
-#                         st.success(f"Found {len(similar_sequences)} closely related viral sequences")
-                        
-#                         # Create results tabs
-#                         tab1, tab2, tab3, tab4 = st.tabs([
-#                             "Phylogenetic Tree",
-#                             "Similar Sequences",
-#                             "Sequence Analysis",
-#                             "Raw Data"
-#                         ])
-                        
-#                         with tab1:
-#                             st.subheader("Phylogenetic Tree of Related Viruses")
-#                             if tree_fig:
-#                                 st.pyplot(tree_fig)
-#                             else:
-#                                 st.error("Could not generate phylogenetic tree")
-                        
-#                         with tab2:
-#                             st.subheader("Similar Viral Sequences")
-#                             df = pd.DataFrame(metadata)
-#                             df['Identity %'] = df['identity'].round(2)
-#                             df['E-value'] = df['e_value'].apply(lambda x: f"{x:.2e}")
-#                             # Reorder columns to show species first and hide accession
-#                             display_df = df[['species', 'Identity %', 'E-value']].copy()
-#                             display_df.columns = ['Species', 'Identity %', 'E-value']
-#                             st.dataframe(display_df)
-                            
-#                             # Add section for top 5 unique species
-#                             st.subheader("Most Similar Species")
-#                             top_species = get_top_unique_species(metadata)
-                            
-#                             for idx, row in top_species.iterrows():
-#                                 species_name = row['species']
-#                                 identity = row['identity']
-#                                 st.markdown(
-#                                     f"""
-#                                     **{species_name}**
-#                                     """
-#                                 )
-
-#                             # st.subheader("Related Human Coronaviruses")
-                            
-#                             corona_species = [
-#                                 {"species": "Human coronavirus 229E (hCoV-229E)", "description": "Common cold coronavirus"},
-#                                 {"species": "Human coronavirus NL63 (hCoV-NL63)", "description": "Upper respiratory tract infection"},
-#                                 {"species": "Human coronavirus OC43 (hCoV-OC43)", "description": "Common cold coronavirus"},
-#                                 {"species": "Human coronavirus HKU1 (hCoV-HKU1)", "description": "Upper respiratory infection"},
-#                                 {"species": "SARS coronavirus (SARS-CoV)", "description": "Severe Acute Respiratory Syndrome"},
-#                                 {"species": "Middle East respiratory syndrome coronavirus (MERS-CoV)", "description": "Middle East Respiratory Syndrome"}
-#                             ]
-                            
-#                             for idx, corona in enumerate(corona_species, 1):
-#                                 st.markdown(
-#                                     f"""
-#                                     **{corona['species']}**  
-#                                     """
-#                                 )
-                        
-#                         with tab3:
-#                             st.subheader("Sequence Analysis")
-#                             frequencies = calculate_nucleotide_freq(str(sequence_data.seq))
-                            
-#                             freq_df = pd.DataFrame({
-#                                 'Nucleotide': list(frequencies.keys()),
-#                                 'Frequency (%)': list(frequencies.values())
-#                             })
-                            
-#                             fig = px.bar(freq_df, x='Nucleotide', y='Frequency (%)',
-#                                         title='Nucleotide Distribution',
-#                                         color='Nucleotide')
-#                             st.plotly_chart(fig)
-                            
-#                             st.metric("GC Content", f"{gc_content(str(sequence_data.seq)):.2f}%")
-                        
-#                         with tab4:
-#                             st.subheader("Raw Sequence Data")
-#                             st.write(f"Sequence ID: {sequence_data.id}")
-#                             st.write(f"Sequence Length: {len(sequence_data.seq)} bp")
-#                             if st.checkbox("Show raw sequence"):
-#                                 st.text_area("Raw Sequence", str(sequence_data.seq), height=200)
-                        
-#                         fasta_analysis_complete = True
-                        
-#                     else:
-#                         st.error("No similar sequences found")
-#                 else:
-#                     st.error("BLAST search failed")
-        
-#         except Exception as e:
-#             progress_placeholder.empty()
-#             status_placeholder.empty()
-#             st.error(f"An error occurred during processing: {str(e)}")
-
-#     else:
-#         st.info("Please upload or paste a FASTA sequence to begin analysis")
-
-#     # Gene Analysis Section - only show if FASTA analysis is complete
-#     if fasta_analysis_complete:
-#         st.markdown("---")
-#         st.header("Gene Annotation Analysis")
-#         st.write("View SARS-CoV-2 gene annotations and organization")
-        
-#         # Hard-coded file paths
-#         gtf_file = 'Sars_cov_2.ASM985889v3.101.gtf'
-#         image_file = 'SARS-CoV-2_Genes.png'
-        
-#         # Create placeholders for status updates and progress bar
-#         gene_progress_placeholder = st.empty()
-#         gene_status_placeholder = st.empty()
-#         gene_progress_bar = gene_progress_placeholder.progress(0)
-        
-#         try:
-#             # Extract genes
-#             gene_names = extract_genes_from_gtf(gtf_file, gene_status_placeholder, gene_progress_bar)
-            
-#             # Create tabs for different views
-#             gene_tab, viz_tab = st.tabs(["Gene List", "Gene Visualization"])
-            
-#             with gene_tab:
-#                 st.subheader("Extracted Genes")
-#                 # Create a clean display of genes in columns
-#                 col1, col2 = st.columns(2)
-#                 genes_per_column = len(gene_names) // 2 + len(gene_names) % 2
-                
-#                 with col1:
-#                     for gene in gene_names[:genes_per_column]:
-#                         st.markdown(f"• {gene}")
-                        
-#                 with col2:
-#                     for gene in gene_names[genes_per_column:]:
-#                         st.markdown(f"• {gene}")
-            
-#             with viz_tab:
-#                 st.subheader("Gene Visualization")
-#                 # Display the image
-#                 fig = display_image(image_file, gene_status_placeholder, gene_progress_bar)
-#                 st.pyplot(fig)
-            
-#             # Complete the progress bar
-#             gene_progress_bar.progress(100)
-#             gene_status_placeholder.success("Gene analysis complete!")
-            
-#             # Clear progress indicators after completion
-#             time.sleep(1)
-#             gene_progress_placeholder.empty()
-#             gene_status_placeholder.empty()
-            
-#         except Exception as e:
-#             gene_progress_placeholder.empty()
-#             gene_status_placeholder.empty()
-#             st.error(f"An error occurred during gene analysis: {str(e)}")
-
-#         # Drug Repurposing Analysis Section
-#         st.markdown("---")
-#         st.header("Drug Repurposing Analysis")
-#         st.write("Analyzing potential drug candidates for SARS-CoV-2 treatment")
-
-#         # Create a container for persistent step updates
-#         with st.container():
-#             try:
-#                 # Run drug repurposing analysis
-#                 results, clinical_results = drug_repurposing(st)
-                
-#                 # Create tabs for different views
-#                 drug_tab1 = st.tabs(["Clinical Trial Drugs"])
-                
-#                 with drug_tab1:
-#                     st.subheader("Drugs in Clinical Trials")
-#                     if clinical_results:
-#                         for drug in clinical_results:
-#                             st.markdown(
-#                                 f"""
-#                                 **{drug['name']}**  
-#                                 Confidence Score: {drug['score']:.4f}
-#                                 """
-#                             )
-#                     else:
-#                         st.info("No matches found in clinical trials database")
-                
-#                 # with drug_tab2:
-#                 #     st.subheader("Top 100 Predicted Drugs")
-#                 #     # Create a dataframe for all results
-#                 #     df = pd.DataFrame(results)
-#                 #     df['Score'] = df['score'].round(4)
-#                 #     st.dataframe(df[['drug', 'Score']])
-                
-#             except Exception as e:
-#                 st.error(f"An error occurred during drug analysis: {str(e)}")
-#     # Footer
-#     st.markdown("---")
-#     st.markdown("""
-#         ### About this tool
-#         This tool provides comprehensive analysis of COVID-19 genomic data:
-#         - Sequence analysis and phylogenetic relationships
-#         - Identification of closely related viral sequences
-#         - Gene annotation analysis and visualization
-#         - Detailed sequence statistics
-#     """)
 @st.cache_data
 def fetch_compound_data(compounds):
     """Cached function to fetch compound data"""
@@ -1132,7 +865,7 @@ def main():
         with st.container():
             try:
                 # Run drug repurposing analysis
-                results, clinical_results = drug_repurposing(st)
+                results, clinical_results_df = drug_repurposing(st)
                 
                 st.title('Drug Information Table')
                 
@@ -1268,6 +1001,161 @@ def main():
                             st.error("PDB structure file not found")
                         except Exception as e:
                             st.error(f"Error loading molecular structure: {str(e)}")
+
+                        # Literature Search Section
+                        st.markdown("---")
+                        st.header("Literature Search")
+                        
+                        try:
+                            # Read the CSV file
+                            df_literature = pd.read_csv('biorxiv_results.csv')
+                            
+                            # Create clickable links in the title column
+                            def make_clickable(title, url):
+                                return f'<a href="{url}" target="_blank">{title}</a>'
+                            
+                            # Apply the clickable link formatting
+                            df_literature['title'] = df_literature.apply(
+                                lambda x: make_clickable(x['title'], x['biorxiv_url']), 
+                                axis=1
+                            )
+                            
+                            # Display the table with clickable links
+                            st.write("Recent bioRxiv papers related to drug mechanisms and interactions:")
+                            st.markdown(
+                                df_literature[['title']].to_html(escape=False),
+                                unsafe_allow_html=True
+                            )
+                            
+                            # Add a note about the source
+                            st.caption("Source: bioRxiv preprint server")
+                            
+                            # Optional: Add filtering capability
+                            with st.expander("🔍 Filter papers"):
+                                search_term = st.text_input(
+                                    "Filter by keyword",
+                                    placeholder="Enter keyword..."
+                                )
+                                if search_term:
+                                    filtered_df = df_literature[
+                                        df_literature['title'].str.contains(
+                                            search_term, 
+                                            case=False, 
+                                            na=False
+                                        )
+                                    ]
+                                    st.markdown(
+                                        filtered_df[['title']].to_html(escape=False),
+                                        unsafe_allow_html=True
+                                    )
+                            
+                        except FileNotFoundError:
+                            st.error("Literature data file not found")
+                        except Exception as e:
+                            st.error(f"Error loading literature data: {str(e)}")
+                            import traceback
+                            st.code(traceback.format_exc(), language="python")
+
+                        # Patent Search Section
+                        st.markdown("---")
+                        st.header("Patent Search")
+                        
+                        try:
+                            # Read the CSV file
+                            df_patents = pd.read_csv('first_10_patents.csv')
+                            
+                            # Clean up titles (remove ellipsis and truncation)
+                            df_patents['title'] = df_patents['title'].apply(
+                                lambda x: x.replace('…', '').strip()
+                            )
+                            
+                            # Create a styled table for patents
+                            st.write("Recent patents related to drug development and applications:")
+                            
+                            # Style the table using custom HTML/CSS
+                            st.markdown("""
+                                <style>
+                                    .patent-table {
+                                        font-size: 0.9em;
+                                        width: 100%;
+                                        border-collapse: collapse;
+                                        margin: 20px 0;
+                                    }
+                                    .patent-table th {
+                                        background-color: #f0f2f6;
+                                        padding: 12px;
+                                        text-align: left;
+                                        font-weight: bold;
+                                    }
+                                    .patent-table td {
+                                        padding: 12px;
+                                        border-bottom: 1px solid #e1e4e8;
+                                    }
+                                    .patent-table tr:hover {
+                                        background-color: #f6f8fa;
+                                    }
+                                </style>
+                                """, unsafe_allow_html=True)
+                            
+                            # Create numbered list of patents with custom styling
+                            html_table = "<table class='patent-table'>"
+                            html_table += "<tr><th>#</th><th>Patent Title</th></tr>"
+                            
+                            for idx, row in df_patents.iterrows():
+                                html_table += f"""
+                                    <tr>
+                                        <td style='width: 50px'>{idx + 1}</td>
+                                        <td>{row['title']}</td>
+                                    </tr>
+                                """
+                            
+                            html_table += "</table>"
+                            st.markdown(html_table, unsafe_allow_html=True)
+                            
+                            # Add filtering capability
+                            with st.expander("🔍 Filter patents"):
+                                search_term = st.text_input(
+                                    "Filter patents by keyword",
+                                    key="patent_search",  # unique key to avoid conflicts
+                                    placeholder="Enter keyword..."
+                                )
+                                
+                                if search_term:
+                                    filtered_df = df_patents[
+                                        df_patents['title'].str.contains(
+                                            search_term, 
+                                            case=False, 
+                                            na=False
+                                        )
+                                    ]
+                                    
+                                    if len(filtered_df) > 0:
+                                        # Create filtered table
+                                        html_filtered = "<table class='patent-table'>"
+                                        html_filtered += "<tr><th>#</th><th>Patent Title</th></tr>"
+                                        
+                                        for idx, row in filtered_df.iterrows():
+                                            html_filtered += f"""
+                                                <tr>
+                                                    <td style='width: 50px'>{idx + 1}</td>
+                                                    <td>{row['title']}</td>
+                                                </tr>
+                                            """
+                                        
+                                        html_filtered += "</table>"
+                                        st.markdown(html_filtered, unsafe_allow_html=True)
+                                    else:
+                                        st.info("No patents found matching your search term.")
+                            
+                            # Add information about the data
+                            st.caption("Source: Patent database search results")
+                            
+                        except FileNotFoundError:
+                            st.error("Patent data file not found")
+                        except Exception as e:
+                            st.error(f"Error loading patent data: {str(e)}")
+                            import traceback
+                            st.code(traceback.format_exc(), language="python")
                 
                 except Exception as e:
                     st.error(f"Error in drug information section: {str(e)}")
