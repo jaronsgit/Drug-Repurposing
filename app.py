@@ -725,7 +725,7 @@ def main():
                             st.plotly_chart(fig)
                             
                             st.metric("GC Content", f"{gc_content(str(sequence_data.seq)):.2f}%")
-
+                            
                         with tab2:
                             st.subheader("Similar Viral Sequences")
                             df = pd.DataFrame(metadata)
@@ -808,8 +808,10 @@ def main():
             with gene_tab:
                 st.subheader("Extracted Genes")
                 
-                gene_df = pd.DataFrame(gene_names, columns=["Gene Names"]).set_index("Gene Names")
+                # Create a DataFrame from the gene names
+                gene_df = pd.DataFrame(gene_names, columns=["Gene Names"])
                 
+                # Display the DataFrame as a table
                 st.dataframe(gene_df, use_container_width=True)
 
             with viz_tab:
@@ -943,7 +945,7 @@ def main():
                                 pdb_data = f.read()
 
                             # Create tabs for different visualization options
-                            viz_tab1, viz_tab2 = st.tabs(["3D Structure"])
+                            viz_tab1 = st.tabs(["3D Structure"])
 
                             with viz_tab1:
                                 st.write("Protein-Drug complex visualization:")
