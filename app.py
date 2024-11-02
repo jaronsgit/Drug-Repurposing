@@ -478,6 +478,21 @@ def display_image(image_file, status_placeholder, progress_bar):
     ax.axis('off')
     return fig
 
+@st.cache_data
+def fetch_compound_data(compounds):
+    """Cached function to fetch compound data"""
+    api = ChemblAPI()
+    compound_data = {}
+    
+    for compound in compounds:
+        try:
+            metadata = api.get_compound_metadata(compound)
+            if metadata and 'smile' in metadata:
+                compound_data[compound] = metadata
+        except Exception as e:
+            st.warning(f"Could not fetch data for {compound}: {str(e)}")
+    
+    return compound_data
 
 @st.cache_data
 def get_cached_chemical_properties(smiles):
@@ -859,15 +874,22 @@ def main():
                     if 'selected_compound' not in st.session_state:
                         st.session_state.selected_compound = None
                     
-                    api = ChemblAPI()
-                    drugs = clinical_results_df["name"].to_list()
-                    chembl_results = [api.get_compound_metadata(drug) for drug in drugs]
-                    data_df = pd.DataFrame.from_records(chembl_results).drop(columns=["smile"])
+                    compounds = []
+                    # Fetch compound data using cached function
+                    compound_data = fetch_compound_data(compounds)
+                    
+                    # Create DataFrame only from successfully fetched data
+                    results = [data for data in compound_data.values() if data]
+                    if not results:
+                        st.error("No compound data could be retrieved")
+                        return
+                        
+                    data_df = pd.DataFrame.from_records(results)
                     data_df = (
                         clinical_results_df[["score", "name"]]
                         .merge(data_df, left_on="name", right_on="input_name", how="left")
                     )
-                    
+                                
                     # Display the main table first
                     display_df = data_df.drop(columns=["smile"]).rename(columns={
                         "compound_name": "Compound", 
