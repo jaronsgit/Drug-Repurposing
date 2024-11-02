@@ -9,4 +9,4 @@ Draw.MolToImage(molecule)
 
 image = Draw.MolToImage(molecule)
 
-image.save("molecule_structure.pdf", "PDF")
+# image.save("molecule_structure.pdf", "PDF")

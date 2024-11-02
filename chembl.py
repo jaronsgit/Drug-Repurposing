@@ -27,6 +27,7 @@ class ChemblAPI:
                 disease_names.add(entry["mesh_heading"])
             
         return {
+            "input_name": compound_name,
             "compound_name": molecule_entries[0]["pref_name"],
             "targets": sorted(target_names),
             "disease_names": sorted(disease_names),
