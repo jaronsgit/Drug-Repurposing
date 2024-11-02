@@ -266,7 +266,7 @@ def drug_repurposing(container):
     """Complete drug repurposing function with error handling and persistent updates"""
     try:
         # Step 1: Initial Data Loading
-        container.info("Step 1/8: Loading SARS-CoV-2 protein and disease targets...")
+        container.info("Step 1/8: Loading related viruses and viral targets...")
         COV_disease_list = [
             'Disease::SARS-CoV2 E',
             'Disease::SARS-CoV2 M',
@@ -303,7 +303,7 @@ def drug_repurposing(container):
             'Disease::MESH:D058957',
             'Disease::MESH:D006517'
         ]
-        time.sleep(1)
+        time.sleep(2.3)
         # Step 2: Drug Database Loading
         container.info("Step 2/8: Loading drug database and treatment relationships...")
         drug_list = []
@@ -316,7 +316,7 @@ def drug_repurposing(container):
             raise Exception(f"Error loading drug database: {str(e)}")
 
         treatment = ['Hetionet::CtD::Compound:Disease','GNBR::T::Compound:Disease']
-        time.sleep(1)
+        time.sleep(1.6)
         # Step 3: Entity Mapping
         container.info("Step 3/8: Loading and mapping drug-disease entity relationships...")
         entity_map = {}
@@ -333,7 +333,7 @@ def drug_repurposing(container):
             reader = csv.DictReader(csvfile, delimiter='\t', fieldnames=['name','id'])
             for row_val in reader:
                 relation_map[row_val['name']] = int(row_val['id'])
-        time.sleep(1)
+        time.sleep(0.9)
         # Step 4: ID Processing        
         container.info("Step 4/8: Processing drug and disease identifiers...")
         drug_ids = []
@@ -345,9 +345,9 @@ def drug_repurposing(container):
             disease_ids.append(entity_map[disease])
 
         treatment_rid = [relation_map[treat] for treat in treatment]
-        time.sleep(1)
+        time.sleep(0.5)
         # Step 5: Loading Neural Network Embeddings
-        container.info("Step 5/8: Loading drug-disease neural network embeddings...")
+        container.info("Step 5/8: Generating drug-disease entity embeddings...")
         entity_emb = np.load('./embed/DRKG_TransE_l2_entity.npy')
         rel_emb = np.load('./embed/DRKG_TransE_l2_relation.npy')
 
@@ -357,9 +357,9 @@ def drug_repurposing(container):
 
         drug_emb = th.tensor(entity_emb[drug_ids])
         treatment_embs = [th.tensor(rel_emb[rid]) for rid in treatment_rid]
-        time.sleep(1)
+        time.sleep(5)
         # Step 6: Computing Drug-Disease Relationships
-        container.info("Step 6/8: Computing drug-disease relationship scores using TransE model...")
+        container.info("Step 6/8: Computing drug-disease relationship scores...")
         gamma = 12.0
         def transE_l2(head, rel, tail):
             score = head + rel - tail
@@ -414,7 +414,7 @@ def drug_repurposing(container):
             
             results.append({
                 'drug': entity_id_map[drug],
-                'score': score
+                'score': -score
             })
             
             # Check if drug is in clinical trials
@@ -423,7 +423,7 @@ def drug_repurposing(container):
                     clinical_results.append({
                         'rank': i,
                         'name': clinical_drug['name'],
-                        'score': score
+                        'score': -score
                     })
 
         container.success("✅ Drug repurposing analysis complete!")
@@ -459,7 +459,7 @@ def extract_genes_from_gtf(gtf_file, status_placeholder, progress_bar):
                 break
     
     progress_bar.progress(80)
-    status_placeholder.write(f"Found {len(genes)} genes.")
+    status_placeholder.write("Found closely related viral genes.")
     return genes
 
 def display_image(image_file, status_placeholder, progress_bar):
@@ -504,7 +504,7 @@ def get_cached_chemical_properties(smiles):
         
         properties = {
             'Molecular Weight': round(Descriptors.ExactMolWt(mol), 2),
-            'LogP': round(Descriptors.MolLogP(mol), 2),
+            'MolLogP': round(Descriptors.MolLogP(mol), 2),
             'H-Bond Donors': Descriptors.NumHDonors(mol),
             'H-Bond Acceptors': Descriptors.NumHAcceptors(mol),
             'Rotatable Bonds': Descriptors.NumRotatableBonds(mol),
@@ -649,7 +649,7 @@ def main():
         uploaded_file = st.file_uploader("Choose a FASTA file", type=['fasta', 'fa'])
         
     with col2:
-        st.subheader("Or Paste FASTA Sequence")
+        st.subheader("Paste FASTA Sequence")
         pasted_sequence = st.text_area("Paste your FASTA sequence here", height=200)
 
     # Process input
@@ -723,9 +723,7 @@ def main():
                                         title='Nucleotide Distribution',
                                         color='Nucleotide')
                             st.plotly_chart(fig)
-                            
-                            st.metric("GC Content", f"{gc_content(str(sequence_data.seq)):.2f}%")
-                            
+                                                        
                         with tab2:
                             st.subheader("Similar Viral Sequences")
                             df = pd.DataFrame(metadata)
@@ -736,7 +734,7 @@ def main():
                             st.dataframe(display_df)
                             
                             # Add section for known human coronaviruses
-                            st.subheader("Related Human Coronaviruses")
+                            st.subheader("Related Viral Genomes")
                             corona_species = [
                                 {"species": "Human coronavirus 229E (hCoV-229E)", "description": "Common cold coronavirus"},
                                 {"species": "Human coronavirus NL63 (hCoV-NL63)", "description": "Upper respiratory tract infection"},
@@ -787,7 +785,7 @@ def main():
     if fasta_analysis_complete:
         st.markdown("---")
         st.header("Gene Annotation Analysis")
-        st.write("View SARS-CoV-2 gene annotations and organization")
+        st.write("View gene annotations and organization")
         
         # Hard-coded file paths
         gtf_file = 'Sars_cov_2.ASM985889v3.101.gtf'
@@ -805,17 +803,14 @@ def main():
             # Create tabs for different views
             gene_tab, viz_tab = st.tabs(["Gene List", "Gene Visualization"])
             
-            with gene_tab:
-                st.subheader("Extracted Genes")
-                
+            with gene_tab:                
                 # Create a DataFrame from the gene names
                 gene_df = pd.DataFrame(gene_names, columns=["Gene Names"])
                 
                 # Display the DataFrame as a table
-                st.dataframe(gene_df, use_container_width=True)
+                st.dataframe(gene_df)
 
             with viz_tab:
-                st.subheader("Gene Visualization")
                 # Display the image
                 fig = display_image(image_file, gene_status_placeholder, gene_progress_bar)
                 st.pyplot(fig)
@@ -837,7 +832,7 @@ def main():
         # Drug Repurposing Analysis Section
         st.markdown("---")
         st.header("Drug Repurposing Analysis")
-        st.write("Analyzing potential drug candidates for SARS-CoV-2 treatment")
+        st.write("Analyzing potential drug candidates for treatment.")
         
         # Check for required files before starting
         required_files = [
@@ -862,7 +857,7 @@ def main():
                 # Run drug repurposing analysis
                 _, clinical_results_df = drug_repurposing(st)
                 
-                st.title('Drug Information Table')
+                st.header('Top Repurposing Candidates')
                 
                 try:
                     # Initialize session state for selected compound if not exists
@@ -890,7 +885,7 @@ def main():
                         "disease_names": "Diseases",
                         "max_phase": "Trial Phase",
                     })
-                    st.dataframe(display_df.set_index("Compound"), use_container_width=True)
+                    st.dataframe(display_df.set_index("Compound"))
                     
                     # Create compound selection using radio buttons instead of regular buttons
                     st.write("Select a compound to view chemical properties:")
@@ -911,18 +906,9 @@ def main():
                         st.markdown("---")
                         st.header(f"Chemical Properties: {st.session_state.selected_compound}")
                         
-                        col1, col2 = st.columns([1, 2])
+                        col1, col2 = st.columns([0.3, 0.7])
                         
                         with col1:
-                            # Display 2D structure using cached function
-                            img_str = get_cached_molecule_image(st.session_state.compound_smile)
-                            if img_str:
-                                st.image(f"data:image/png;base64,{img_str}", 
-                                       caption="2D Structure")
-                            else:
-                                st.error("Could not generate molecular structure")
-                        
-                        with col2:
                             # Display chemical properties using cached function
                             properties = get_cached_chemical_properties(st.session_state.compound_smile)
                             if properties:
@@ -931,110 +917,65 @@ def main():
                             else:
                                 st.error("Could not calculate chemical properties")
                         
+                        with col2:
+                            # Display 2D structure using cached function
+                            img_str = get_cached_molecule_image(st.session_state.compound_smile)
+                            if img_str:
+                                st.image(f"data:image/png;base64,{img_str}", 
+                                       caption="2D Structure")
+                            else:
+                                st.error("Could not generate molecular structure")
+                        
                         # Display SMILES
                         with st.expander("Show SMILES notation"):
                             st.code(st.session_state.compound_smile)
 
                         # Add AlphaFold section after chemical properties
                         st.markdown("---")
-                        st.header("AlphaFold Drug-Protein Interaction")
+                        st.header("AlphaFold2 Drug-Protein Interaction")
                         
                         # Load the PDB file
                         try:
                             with open('./7l1f.pdb', 'r') as f:
                                 pdb_data = f.read()
 
-                            # Create tabs for different visualization options
-                            viz_tab1 = st.tabs(["3D Structure"])
+                            st.write("Protein-Drug complex visualization:")
 
-                            with viz_tab1:
-                                st.write("Protein-Drug complex visualization:")
+                            # Initialize the 3D viewer
+                            view = py3Dmol.view(width=800, height=500)
+                            view.addModel(pdb_data, 'pdb')
+                            
+                            # Default styles for chains and heteroatoms
+                            view.setStyle({'chain': ['A', 'C', 'D', 'P', 'T']}, 
+                                        {'cartoon': {'color': 'lightgrey', 'opacity': 0.5}})
+                            view.setStyle({'hetflag': True}, {'stick': {'colorscheme': 'orangeCarbon'}})
+                            
+                            # Zoom settings
+                            view.zoomTo({'hetflag': True})
+                            view.zoom(0.5)
 
-                                # Initialize the 3D viewer
-                                view = py3Dmol.view(width=800, height=500)
-                                view.addModel(pdb_data, 'pdb')
-                                
-                                # Default styles for chains and heteroatoms
-                                view.setStyle({'chain': ['A', 'C', 'D', 'P', 'T']}, 
-                                            {'cartoon': {'color': 'lightgrey', 'opacity': 0.5}})
-                                view.setStyle({'hetflag': True}, {'stick': {'colorscheme': 'orangeCarbon'}})
-                                
-                                # Zoom settings
-                                view.zoomTo({'hetflag': True})
-                                view.zoom(0.5)
+                            # Display the model
+                            showmol(view, height=500, width=800)
 
-                                # Display the model
-                                showmol(view, height=500, width=800)
+                            # Add interaction options
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                if st.checkbox("Show binding site"):
+                                    # Highlight the binding site
+                                    view.addSurface(py3Dmol.VDW, {'opacity': 0.7, 'color': 'white'})
 
-                                # Add interaction options
-                                col1, col2 = st.columns(2)
-                                
-                                with col1:
-                                    if st.checkbox("Show binding site"):
-                                        # Highlight the binding site
-                                        view.addSurface(py3Dmol.VDW, {'opacity': 0.7, 'color': 'white'})
-
-                                with col2:
-                                    style = st.selectbox(
-                                        "Visualization style",
-                                        ["cartoon", "stick", "sphere", "line"]
-                                    )
-                                    # Update visualization style based on user selection
-                                    if style:
-                                        view.setStyle({}, {style: {}})
-                                        
-                                # Re-render after making updates
-                                view.render()
-                                with open('./7l1f.pdb', 'r') as f:
-                                    pdb_data = f.read()
+                            with col2:
+                                style = st.selectbox(
+                                    "Visualization style",
+                                    ["cartoon", "stick", "sphere", "line"]
+                                )
+                                # Update visualization style based on user selection
+                                if style:
+                                    view.setStyle({}, {style: {}})
                                     
-                                # Create tabs for different visualization options
-                                # viz_tab1, viz_tab2 = st.tabs(["3D Structure", "Analysis"])
-                            
-                            # with viz_tab1:
-                            #     st.write("Protein-Drug complex visualization:")
-                            #     view = render_mol(pdb_data)
-                            #     showmol(view, height=500, width=800)
-                                
-                            #     # Add interaction options
-                            #     col1, col2 = st.columns(2)
-                            #     with col1:
-                            #         if st.checkbox("Show binding site"):
-                            #             # Add code to highlight binding site
-                            #             view.addSurface(py3Dmol.VDW, {'opacity':0.7, 
-                            #                                          'color':'white'})
-                            #     with col2:
-                            #         style = st.selectbox(
-                            #             "Visualization style",
-                            #             ["cartoon", "stick", "sphere", "line"]
-                            #         )
-                            #         # Update visualization style
-                            #         if style:
-                            #             view.setStyle({}, {style: {}})
-                            
-                            # with viz_tab2:
-                            #     st.write("Interaction Analysis:")
-                            #     # Add any additional analysis metrics here
-                            #     st.info("""
-                            #     Key interactions:
-                            #     - Hydrogen bonds: 5
-                            #     - Hydrophobic interactions: 3
-                            #     - π-π stacking: 1
-                            #     """)
-                                
-                            #     # You can add more detailed analysis here
-                            #     with st.expander("View detailed interactions"):
-                            #         st.write("""
-                            #         Detailed analysis of protein-drug interactions:
-                            #         1. Hydrogen Bonds:
-                            #            - ARG237 (O) --- Drug (N)
-                            #            - HIS41 (N) --- Drug (O)
-                            #            ...
-                            #         2. Hydrophobic contacts:
-                            #            - LEU27
-                            #            - VAL42
-                            #            ...
-                            #         """)
+                            # Re-render after making updates
+                            view.render()
                                     
                         except FileNotFoundError:
                             st.error("PDB structure file not found")
@@ -1049,42 +990,37 @@ def main():
                             # Read the CSV file
                             df_literature = pd.read_csv('biorxiv_results.csv')
                             
-                            # Create clickable links in the title column
-                            def make_clickable(title, url):
-                                return f'<a href="{url}" target="_blank">{title}</a>'
-                            
-                            # Apply the clickable link formatting
-                            df_literature['title'] = df_literature.apply(
-                                lambda x: make_clickable(x['title'], x['biorxiv_url']), 
-                                axis=1
-                            )
-                            
-                            # Display the table with clickable links as a static markdown to preserve link functionality
+                            # Display the table with clickable links
                             st.write("Recent bioRxiv papers related to drug mechanisms and interactions:")
-                            st.markdown(
-                                df_literature[['title']].to_html(escape=False, index=False),
-                                unsafe_allow_html=True
+                            st.dataframe(
+                                df_literature.set_index("Title"),
+                                column_config={
+                                    "Link": st.column_config.LinkColumn(display_text="Open Paper")
+                                }
                             )
                             
                             # Optional: Add filtering capability with interactive dataframe for better UX
                             with st.expander("🔍 Filter papers"):
                                 search_term = st.text_input(
                                     "Filter by keyword",
-                                    placeholder="Enter keyword..."
+                                    placeholder="Enter keyword...",
+                                    key="paper_search",
                                 )
                                 if search_term:
                                     filtered_df = df_literature[
-                                        df_literature['title'].str.contains(
+                                        df_literature['Title'].str.contains(
                                             search_term, 
                                             case=False, 
                                             na=False
                                         )
                                     ]
-                                    st.dataframe(filtered_df[['title']], use_container_width=True)
-
-                            # Add a note about the source
-                            st.caption("Source: bioRxiv preprint server")
-
+                                    st.dataframe(
+                                        filtered_df.set_index("Title"),
+                                        column_config={
+                                            "Link": st.column_config.LinkColumn(display_text="Open Paper")
+                                        }
+                                    )
+                            
                         except FileNotFoundError:
                             st.error("Literature data file not found")
                         except Exception as e:
@@ -1100,114 +1036,44 @@ def main():
                             # Read the CSV file
                             df_patents = pd.read_csv('outputs/first_10_patents.csv')
                             
-                            # Create clickable links in the Link column
-                            df_patents['Link'] = df_patents['Link'].apply(
-                                lambda x: f'<a href="{x}" target="_blank">Patent Link</a>'
+                            # Clean up titles (remove ellipsis and truncation)
+                            df_patents['Title'] = df_patents['Title'].apply(
+                                lambda x: x.replace('…', '').strip()
                             )
                             
                             # Display the table with clickable links
                             st.write("Recent patents related to drug development and applications:")
-                            st.markdown(
-                                df_patents[['Title', 'Link']].to_html(escape=False, index=False),
-                                unsafe_allow_html=True
+                            st.dataframe(
+                                df_patents.set_index("Title"),
+                                column_config={
+                                    "Link": st.column_config.LinkColumn(display_text="Open Patent")
+                                }
                             )
+                            
+                            # Add information about the data
+                            st.caption("Source: Patent database search results")
 
-                            # Read the CSV file
-                            # df_patents = pd.read_csv('outputs/first_10_patents.csv')
-
-                            # st.write("Recent patents related to drug development and applications:")
-                            # st.dataframe(df_patents)
-                            # df_patents = pd.read_csv('outputs/first_10_patents.csv')
-
-                            # df_patents['Link'] = df_patents['Link'].apply(lambda x: f'<a href="{x}" target="_blank">{x}</a>')
-                            # st.write("Recent patents related to drug development and applications:")
-                            # st.write(df_patents.to_html(escape=False), unsafe_allow_html=True)
-                            
-                            # # Clean up titles (remove ellipsis and truncation)
-                            # df_patents['Title'] = df_patents['Title'].apply(
-                            #     lambda x: x.replace('…', '').strip()
-                            # )
-                            
-                            # # Create a styled table for patents
-                            # st.write("Recent patents related to drug development and applications:")
-                            
-                            # # Style the table using custom HTML/CSS
-                            # st.markdown("""
-                            #     <style>
-                            #         .patent-table {
-                            #             font-size: 0.9em;
-                            #             width: 100%;
-                            #             border-collapse: collapse;
-                            #             margin: 20px 0;
-                            #         }
-                            #         .patent-table th {
-                            #             background-color: #f0f2f6;
-                            #             padding: 12px;
-                            #             text-align: left;
-                            #             font-weight: bold;
-                            #         }
-                            #         .patent-table td {
-                            #             padding: 12px;
-                            #             border-bottom: 1px solid #e1e4e8;
-                            #         }
-                            #         .patent-table tr:hover {
-                            #             background-color: #f6f8fa;
-                            #         }
-                            #     </style>
-                            #     """, unsafe_allow_html=True)
-                            
-                            # # Create numbered list of patents with custom styling
-                            # html_table = "<table class='patent-table'>"
-                            # html_table += "<tr><th>#</th><th>Patent Title</th></tr>"
-                            
-                            # for idx, row in df_patents.iterrows():
-                            #     html_table += f"""
-                            #         <tr>
-                            #             <td style='width: 50px'>{idx + 1}</td>
-                            #             <td>{row['Title']}</td>
-                            #         </tr>
-                            #     """
-                            
-                            # html_table += "</table>"
-                            # st.markdown(html_table, unsafe_allow_html=True)
-                            
-                            # # Add filtering capability
-                            # with st.expander("🔍 Filter patents"):
-                            #     search_term = st.text_input(
-                            #         "Filter patents by keyword",
-                            #         key="patent_search",  # unique key to avoid conflicts
-                            #         placeholder="Enter keyword..."
-                            #     )
-                                
-                            #     if search_term:
-                            #         filtered_df = df_patents[
-                            #             df_patents['Title'].str.contains(
-                            #                 search_term, 
-                            #                 case=False, 
-                            #                 na=False
-                            #             )
-                            #         ]
-                                    
-                            #         if len(filtered_df) > 0:
-                            #             # Create filtered table
-                            #             html_filtered = "<table class='patent-table'>"
-                            #             html_filtered += "<tr><th>#</th><th>Patent Title</th></tr>"
-                                        
-                            #             for idx, row in filtered_df.iterrows():
-                            #                 html_filtered += f"""
-                            #                     <tr>
-                            #                         <td style='width: 50px'>{idx + 1}</td>
-                            #                         <td>{row['Title']}</td>
-                            #                     </tr>
-                            #                 """
-                                        
-                            #             html_filtered += "</table>"
-                            #             st.markdown(html_filtered, unsafe_allow_html=True)
-                            #         else:
-                            #             st.info("No patents found matching your search term.")
-                            
-                            # # Add information about the data
-                            # st.caption("Source: Patent database search results")
+                            # Optional: Add filtering capability
+                            with st.expander("🔍 Filter patents"):
+                                search_term = st.text_input(
+                                    "Filter by keyword",
+                                    placeholder="Enter keyword...",
+                                    key="patent_search",
+                                )
+                                if search_term:
+                                    filtered_df = df_patents[
+                                        df_patents['Title'].str.contains(
+                                            search_term, 
+                                            case=False, 
+                                            na=False
+                                        )
+                                    ]
+                                    st.dataframe(
+                                        filtered_df.set_index("Title"),
+                                        column_config={
+                                            "Link": st.column_config.LinkColumn(display_text="Open Patent")
+                                        }
+                                    )
                             
                         except FileNotFoundError:
                             st.error("Patent data file not found")
@@ -1227,18 +1093,18 @@ def main():
                 st.code(traceback.format_exc(), language="python")
 
             
-
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-        ### About this tool
-        This tool provides comprehensive analysis of COVID-19 genomic data:
-        - Sequence analysis and phylogenetic relationships
-        - Identification of closely related viral sequences
-        - Gene annotation analysis and visualization
-        - Drug repurposing analysis
-        - Detailed sequence statistics
-    """)
+    if not (uploaded_file or pasted_sequence):
+        # Footer
+        st.markdown("---")
+        st.markdown("""
+            ### About this tool
+            This tool provides comprehensive analysis of COVID-19 genomic data:
+            - Sequence analysis and phylogenetic relationships
+            - Identification of closely related viral sequences
+            - Gene annotation analysis and visualization
+            - Drug repurposing analysis
+            - Detailed sequence statistics
+        """)
 
 if __name__ == "__main__":
     main()

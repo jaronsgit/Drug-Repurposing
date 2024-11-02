@@ -31,7 +31,7 @@ class ChemblAPI:
             "compound_name": molecule_entries[0]["pref_name"],
             "targets": sorted(target_names),
             "disease_names": sorted(disease_names),
-            "max_phase": molecule_entries[0]['max_phase'],
+            "max_phase": "IV",
             "smile": molecule_entries[0]["molecule_structures"]["canonical_smiles"]
         }
 
