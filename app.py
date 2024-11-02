@@ -5,6 +5,7 @@ from Bio.Seq import Seq
 import plotly.express as px
 import io
 import re
+from chembl import ChemblAPI
 
 def calculate_nucleotide_freq(sequence):
     """Calculate nucleotide frequencies in the sequence"""
@@ -135,3 +136,16 @@ st.markdown("""
     - GC content calculation
     - Detailed sequence statistics
 """)
+
+
+
+
+st.title('Drug Information Table')
+api = ChemblAPI()
+compounds = ["Remdesivir", "Ribavirin", "Dexamethasone", "Colchicine", "Methylprednisolone", "Oseltamivir"]
+results = [api.get_compound_metadata(compound) for compound in compounds]
+data_df = pd.DataFrame.from_records(results).drop(columns=["smile"])
+
+
+# Display interactive table with styling
+st.dataframe(data_df.style.set_properties(**{'text-align': 'left'}))
