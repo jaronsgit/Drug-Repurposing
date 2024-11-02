@@ -427,7 +427,7 @@ def drug_repurposing(container):
                     })
 
         container.success("✅ Drug repurposing analysis complete!")
-        return pd.DataFrame(results), pd.DataFrame(clinical_results)
+        return results, clinical_results
         
     except Exception as e:
         import traceback
@@ -865,7 +865,7 @@ def main():
         with st.container():
             try:
                 # Run drug repurposing analysis
-                _, clinical_results_df = drug_repurposing(st)
+                results, clinical_results_df = drug_repurposing(st)
                 
                 st.title('Drug Information Table')
                 
@@ -874,7 +874,9 @@ def main():
                     if 'selected_compound' not in st.session_state:
                         st.session_state.selected_compound = None
                     
-                    compounds = []
+                    compounds = ["Remdesivir", "Ribavirin", "Dexamethasone", 
+                               "Colchicine", "Methylprednisolone", "Oseltamivir"]
+                    
                     # Fetch compound data using cached function
                     compound_data = fetch_compound_data(compounds)
                     
@@ -885,11 +887,7 @@ def main():
                         return
                         
                     data_df = pd.DataFrame.from_records(results)
-                    data_df = (
-                        clinical_results_df[["score", "name"]]
-                        .merge(data_df, left_on="name", right_on="input_name", how="left")
-                    )
-                                
+                    
                     # Display the main table first
                     display_df = data_df.drop(columns=["smile"]).rename(columns={
                         "compound_name": "Compound", 
