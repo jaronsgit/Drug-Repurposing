@@ -427,7 +427,7 @@ def drug_repurposing(container):
                     })
 
         container.success("✅ Drug repurposing analysis complete!")
-        return results, clinical_results
+        return pd.DataFrame(results), pd.DataFrame(clinical_results)
         
     except Exception as e:
         import traceback

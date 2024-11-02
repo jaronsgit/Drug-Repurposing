@@ -164,3 +164,4 @@ drkg.tsv
 embed
 *.tsv
 ._embed
+cache
