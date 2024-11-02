@@ -641,8 +641,24 @@ def main():
     if debug_mode:
         st.sidebar.info("Debug Mode: Using cached BLAST results when available")
 
-    # Input methods
-    col1, col2 = st.columns(2)
+    # NEW: Create a container for consistent styling
+    input_container = st.container()
+    
+    # CHANGED: Use container's columns instead of direct st.columns
+    col1, col2 = input_container.columns(2)
+    
+    # NEW: Added style for consistent boxes
+    box_style = """
+    <style>
+        .stFileUploader > div > div > div {
+            min-height: 200px;
+        }
+        .uploadedFile {
+            height: 200px;
+        }
+    </style>
+    """
+    st.markdown(box_style, unsafe_allow_html=True)
     
     with col1:
         st.subheader("Upload FASTA File")
@@ -650,7 +666,8 @@ def main():
         
     with col2:
         st.subheader("Or Paste FASTA Sequence")
-        pasted_sequence = st.text_area("Paste your FASTA sequence here", height=200)
+        # CHANGED: Height adjusted to 167 from 200
+        pasted_sequence = st.text_area("Paste your FASTA sequence here", height=70)
 
     # Process input
     sequence_data = None
