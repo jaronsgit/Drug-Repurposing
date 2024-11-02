@@ -1049,7 +1049,7 @@ def main():
                         # Literature Search Section
                         st.markdown("---")
                         st.header("Literature Search")
-                        
+
                         try:
                             # Read the CSV file
                             df_literature = pd.read_csv('biorxiv_results.csv')
@@ -1064,17 +1064,14 @@ def main():
                                 axis=1
                             )
                             
-                            # Display the table with clickable links
+                            # Display the table with clickable links as a static markdown to preserve link functionality
                             st.write("Recent bioRxiv papers related to drug mechanisms and interactions:")
                             st.markdown(
-                                df_literature[['title']].to_html(escape=False),
+                                df_literature[['title']].to_html(escape=False, index=False),
                                 unsafe_allow_html=True
                             )
                             
-                            # Add a note about the source
-                            st.caption("Source: bioRxiv preprint server")
-                            
-                            # Optional: Add filtering capability
+                            # Optional: Add filtering capability with interactive dataframe for better UX
                             with st.expander("🔍 Filter papers"):
                                 search_term = st.text_input(
                                     "Filter by keyword",
@@ -1088,11 +1085,11 @@ def main():
                                             na=False
                                         )
                                     ]
-                                    st.markdown(
-                                        filtered_df[['title']].to_html(escape=False),
-                                        unsafe_allow_html=True
-                                    )
-                            
+                                    st.dataframe(filtered_df[['title']], use_container_width=True)
+
+                            # Add a note about the source
+                            st.caption("Source: bioRxiv preprint server")
+
                         except FileNotFoundError:
                             st.error("Literature data file not found")
                         except Exception as e:
@@ -1103,96 +1100,119 @@ def main():
                         # Patent Search Section
                         st.markdown("---")
                         st.header("Patent Search")
-                        
+
                         try:
                             # Read the CSV file
-                            df_patents = pd.read_csv('first_10_patents.csv')
+                            df_patents = pd.read_csv('outputs/first_10_patents.csv')
                             
-                            # Clean up titles (remove ellipsis and truncation)
-                            df_patents['title'] = df_patents['title'].apply(
-                                lambda x: x.replace('…', '').strip()
+                            # Create clickable links in the Link column
+                            df_patents['Link'] = df_patents['Link'].apply(
+                                lambda x: f'<a href="{x}" target="_blank">Patent Link</a>'
                             )
                             
-                            # Create a styled table for patents
+                            # Display the table with clickable links
                             st.write("Recent patents related to drug development and applications:")
+                            st.markdown(
+                                df_patents[['Title', 'Link']].to_html(escape=False, index=False),
+                                unsafe_allow_html=True
+                            )
+
+                            # Read the CSV file
+                            # df_patents = pd.read_csv('outputs/first_10_patents.csv')
+
+                            # st.write("Recent patents related to drug development and applications:")
+                            # st.dataframe(df_patents)
+                            # df_patents = pd.read_csv('outputs/first_10_patents.csv')
+
+                            # df_patents['Link'] = df_patents['Link'].apply(lambda x: f'<a href="{x}" target="_blank">{x}</a>')
+                            # st.write("Recent patents related to drug development and applications:")
+                            # st.write(df_patents.to_html(escape=False), unsafe_allow_html=True)
                             
-                            # Style the table using custom HTML/CSS
-                            st.markdown("""
-                                <style>
-                                    .patent-table {
-                                        font-size: 0.9em;
-                                        width: 100%;
-                                        border-collapse: collapse;
-                                        margin: 20px 0;
-                                    }
-                                    .patent-table th {
-                                        background-color: #f0f2f6;
-                                        padding: 12px;
-                                        text-align: left;
-                                        font-weight: bold;
-                                    }
-                                    .patent-table td {
-                                        padding: 12px;
-                                        border-bottom: 1px solid #e1e4e8;
-                                    }
-                                    .patent-table tr:hover {
-                                        background-color: #f6f8fa;
-                                    }
-                                </style>
-                                """, unsafe_allow_html=True)
+                            # # Clean up titles (remove ellipsis and truncation)
+                            # df_patents['Title'] = df_patents['Title'].apply(
+                            #     lambda x: x.replace('…', '').strip()
+                            # )
                             
-                            # Create numbered list of patents with custom styling
-                            html_table = "<table class='patent-table'>"
-                            html_table += "<tr><th>#</th><th>Patent Title</th></tr>"
+                            # # Create a styled table for patents
+                            # st.write("Recent patents related to drug development and applications:")
                             
-                            for idx, row in df_patents.iterrows():
-                                html_table += f"""
-                                    <tr>
-                                        <td style='width: 50px'>{idx + 1}</td>
-                                        <td>{row['title']}</td>
-                                    </tr>
-                                """
+                            # # Style the table using custom HTML/CSS
+                            # st.markdown("""
+                            #     <style>
+                            #         .patent-table {
+                            #             font-size: 0.9em;
+                            #             width: 100%;
+                            #             border-collapse: collapse;
+                            #             margin: 20px 0;
+                            #         }
+                            #         .patent-table th {
+                            #             background-color: #f0f2f6;
+                            #             padding: 12px;
+                            #             text-align: left;
+                            #             font-weight: bold;
+                            #         }
+                            #         .patent-table td {
+                            #             padding: 12px;
+                            #             border-bottom: 1px solid #e1e4e8;
+                            #         }
+                            #         .patent-table tr:hover {
+                            #             background-color: #f6f8fa;
+                            #         }
+                            #     </style>
+                            #     """, unsafe_allow_html=True)
                             
-                            html_table += "</table>"
-                            st.markdown(html_table, unsafe_allow_html=True)
+                            # # Create numbered list of patents with custom styling
+                            # html_table = "<table class='patent-table'>"
+                            # html_table += "<tr><th>#</th><th>Patent Title</th></tr>"
                             
-                            # Add filtering capability
-                            with st.expander("🔍 Filter patents"):
-                                search_term = st.text_input(
-                                    "Filter patents by keyword",
-                                    key="patent_search",  # unique key to avoid conflicts
-                                    placeholder="Enter keyword..."
-                                )
+                            # for idx, row in df_patents.iterrows():
+                            #     html_table += f"""
+                            #         <tr>
+                            #             <td style='width: 50px'>{idx + 1}</td>
+                            #             <td>{row['Title']}</td>
+                            #         </tr>
+                            #     """
+                            
+                            # html_table += "</table>"
+                            # st.markdown(html_table, unsafe_allow_html=True)
+                            
+                            # # Add filtering capability
+                            # with st.expander("🔍 Filter patents"):
+                            #     search_term = st.text_input(
+                            #         "Filter patents by keyword",
+                            #         key="patent_search",  # unique key to avoid conflicts
+                            #         placeholder="Enter keyword..."
+                            #     )
                                 
-                                if search_term:
-                                    filtered_df = df_patents[
-                                        df_patents['title'].str.contains(
-                                            search_term, 
-                                            case=False, 
-                                            na=False
-                                        )
-                                    ]
+                            #     if search_term:
+                            #         filtered_df = df_patents[
+                            #             df_patents['Title'].str.contains(
+                            #                 search_term, 
+                            #                 case=False, 
+                            #                 na=False
+                            #             )
+                            #         ]
                                     
-                                    if len(filtered_df) > 0:
-                                        # Create filtered table
-                                        html_filtered = "<table class='patent-table'>"
-                                        html_filtered += "<tr><th>#</th><th>Patent Title</th></tr>"
+                            #         if len(filtered_df) > 0:
+                            #             # Create filtered table
+                            #             html_filtered = "<table class='patent-table'>"
+                            #             html_filtered += "<tr><th>#</th><th>Patent Title</th></tr>"
                                         
-                                        for idx, row in filtered_df.iterrows():
-                                            html_filtered += f"""
-                                                <tr>
-                                                    <td style='width: 50px'>{idx + 1}</td>
-                                                    <td>{row['title']}</td>
-                                                </tr>
-                                            """
+                            #             for idx, row in filtered_df.iterrows():
+                            #                 html_filtered += f"""
+                            #                     <tr>
+                            #                         <td style='width: 50px'>{idx + 1}</td>
+                            #                         <td>{row['Title']}</td>
+                            #                     </tr>
+                            #                 """
                                         
-                                        html_filtered += "</table>"
-                                        st.markdown(html_filtered, unsafe_allow_html=True)
-                                    else:
-                                        st.info("No patents found matching your search term.")
+                            #             html_filtered += "</table>"
+                            #             st.markdown(html_filtered, unsafe_allow_html=True)
+                            #         else:
+                            #             st.info("No patents found matching your search term.")
                             
-                            # Add information about the data
-                            st.caption("Source: Patent database search results")
+                            # # Add information about the data
+                            # st.caption("Source: Patent database search results")
                             
                         except FileNotFoundError:
                             st.error("Patent data file not found")
