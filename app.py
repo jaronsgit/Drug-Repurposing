@@ -223,8 +223,58 @@ def get_top_unique_species(metadata, n=5):
     
     return top_species[['species', 'identity']]
     
+#def create_phylogenetic_tree(query_sequence, similar_sequences):
+#    """Create phylogenetic tree using Biopython's built-in tools with improved formatting."""
+#    try:
+        # Prepare sequences for alignment
+#        sequences = [query_sequence] + similar_sequences
+        
+        # Create an empty alignment
+#        alignment = MultipleSeqAlignment([])
+        
+        # Find the length of the shortest sequence
+#        min_length = min(len(s.seq) for s in sequences)
+        
+        # Add sequences to alignment, truncating to the shortest length
+#        for seq in sequences:
+#            seq_str = str(seq.seq)[:min_length]
+#            short_id = seq.id.split('.')[0]  # Take only the first part of the identifier
+#            record = SeqRecord(
+#                Seq(seq_str),
+#                id=short_id[:10],  # Limit ID length to prevent formatting issues
+#                name=short_id[:10],
+#                description=""
+#            )
+#            alignment.append(record)
+
+        # Calculate distance matrix
+#        calculator = DistanceCalculator('identity')
+#        dm = calculator.get_distance(alignment)
+        
+        # Create tree constructor and build tree
+#        constructor = DistanceTreeConstructor(calculator)
+#        tree = constructor.build_tree(alignment)
+        
+        # Draw the tree with improved formatting
+#        fig, ax = plt.subplots(figsize=(20, 15))  # Increase figure size for better readability
+#        Phylo.draw(tree, axes=ax, show_confidence=False)
+        
+        # Improve title and labels formatting
+#        plt.title("Phylogenetic Tree of Related Viral Sequences", fontsize=20)  # Larger title font size
+#        ax.tick_params(axis='x', labelsize=12)  # Increase x-axis label size
+#        ax.tick_params(axis='y', labelsize=12)  # Increase y-axis label size
+        
+        # Adjust layout to prevent overlapping text
+#        plt.tight_layout()
+
+#        return fig, alignment
+#    
+#    except Exception as e:
+#        st.error(f"Error creating phylogenetic tree: {str(e)}")
+#        return None, None
+    
 def create_phylogenetic_tree(query_sequence, similar_sequences):
-    """Create phylogenetic tree using Biopython's built-in tools with improved formatting."""
+    """Create phylogenetic tree using Biopython's built-in tools with enhanced formatting."""
     try:
         # Prepare sequences for alignment
         sequences = [query_sequence] + similar_sequences
@@ -241,8 +291,8 @@ def create_phylogenetic_tree(query_sequence, similar_sequences):
             short_id = seq.id.split('.')[0]  # Take only the first part of the identifier
             record = SeqRecord(
                 Seq(seq_str),
-                id=short_id[:10],  # Limit ID length to prevent formatting issues
-                name=short_id[:10],
+                id=short_id[:15],  # Increased ID length limit
+                name=short_id[:15],
                 description=""
             )
             alignment.append(record)
@@ -255,18 +305,37 @@ def create_phylogenetic_tree(query_sequence, similar_sequences):
         constructor = DistanceTreeConstructor(calculator)
         tree = constructor.build_tree(alignment)
         
-        # Draw the tree with improved formatting
-        fig, ax = plt.subplots(figsize=(20, 15))  # Increase figure size for better readability
-        Phylo.draw(tree, axes=ax, show_confidence=False)
+        # Create figure with larger size
+        fig, ax = plt.subplots(figsize=(24, 18))  # Increased figure size
         
-        # Improve title and labels formatting
-        plt.title("Phylogenetic Tree of Related Viral Sequences", fontsize=20)  # Larger title font size
-        ax.tick_params(axis='x', labelsize=12)  # Increase x-axis label size
-        ax.tick_params(axis='y', labelsize=12)  # Increase y-axis label size
+        # Draw the tree with custom parameters
+        Phylo.draw(tree, axes=ax, show_confidence=False, 
+                  label_func=lambda x: x.name,  # Use the full name as label
+                  do_show=False)  # Prevent automatic display
         
-        # Adjust layout to prevent overlapping text
-        plt.tight_layout()
-
+        # Increase font size for labels and adjust specific labels
+        adjustment = 1  # Small adjustment value for label positions
+        for text in ax.texts:
+            
+            if 'inner' in text.get_text().lower():
+                text.set_visible(False)
+            else:
+                text.set_fontsize(35)  # Larger font for sequence labels
+            
+        # Remove tick labels and ticks
+        ax.set_xticks([])
+        ax.set_yticks([])
+        
+        # Remove axis labels
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        
+        # Add more space between labels and tree
+        ax.set_xlim(ax.get_xlim()[0], ax.get_xlim()[1] * 1.15)  # Add 15% more space on the right
+        
+        # Adjust layout to prevent overlapping
+        plt.tight_layout(pad=2.0)  
+        
         return fig, alignment
     
     except Exception as e:
