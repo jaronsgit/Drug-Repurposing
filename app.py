@@ -78,6 +78,8 @@ def perform_filtered_blast_search(sequence):
     """
     Perform BLAST search with caching for faster development
     """
+    placeholder = st.empty()
+
     # Define cache file path using deterministic hash
     cache_dir = Path("cache")
     sequence_hash = get_sequence_hash(sequence)
@@ -89,12 +91,14 @@ def perform_filtered_blast_search(sequence):
         
         # Check if cached results exist
         if cache_file.exists():
-            st.info("Loading BLAST results from cache...")
+            placeholder.info("Loading BLAST results from cache...")
+            time.sleep(1)
             with open(cache_file, 'rb') as f:
+                placeholder.empty()
                 return pickle.load(f)
         
         # If no cache, perform BLAST search
-        st.info("No cached results found. Performing BLAST search...")
+        placeholder.info("No cached results found. Performing BLAST search...")
         # Search against nr database, exclude SARS-CoV-2 (taxid:2697049)
         entrez_query = "txid10239[Organism:exp] NOT txid2697049[Organism]"
         result_handle = NCBIWWW.qblast(
@@ -107,16 +111,18 @@ def perform_filtered_blast_search(sequence):
         )
         
         # Cache the results
-        st.info("Caching BLAST results for future use...")
+        placeholder.info("Caching BLAST results for future use...")
         # Convert BLAST results to string for storage
         result_text = result_handle.read()
         with open(cache_file, 'wb') as f:
             pickle.dump(result_text, f)
         
+        placeholder.empty()
         # Create a StringIO object to make it compatible with BLAST XML parser
         return io.StringIO(result_text)
         
     except Exception as e:
+        placeholder.empty()
         st.error(f"BLAST search failed: {str(e)}")
         return None
 
@@ -599,7 +605,7 @@ def get_cached_molecule_image(smiles):
         if mol is None:
             return None
         
-        img = Draw.MolToImage(mol)
+        img = Draw.MolToImage(mol, size=(600, 600))
         buffered = io.BytesIO()
         img.save(buffered, format="PNG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
@@ -1012,8 +1018,11 @@ def main():
                             # Display 2D structure using cached function
                             img_str = get_cached_molecule_image(st.session_state.compound_smile)
                             if img_str:
-                                st.image(f"data:image/png;base64,{img_str}", 
-                                       caption="2D Structure")
+                                st.image(
+                                    f"data:image/png;base64,{img_str}", 
+                                    caption="2D Structure", 
+                                    use_column_width=True
+                                )
                             else:
                                 st.error("Could not generate molecular structure")
                         
