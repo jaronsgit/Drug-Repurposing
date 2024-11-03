@@ -218,7 +218,7 @@ def get_top_unique_species(metadata, n=5):
     return top_species[['species', 'identity']]
     
 def create_phylogenetic_tree(query_sequence, similar_sequences):
-    """Create phylogenetic tree using Biopython's built-in tools"""
+    """Create phylogenetic tree using Biopython's built-in tools with improved formatting."""
     try:
         # Prepare sequences for alignment
         sequences = [query_sequence] + similar_sequences
@@ -231,9 +231,7 @@ def create_phylogenetic_tree(query_sequence, similar_sequences):
         
         # Add sequences to alignment, truncating to the shortest length
         for seq in sequences:
-            # Truncate or pad sequence to minimum length
             seq_str = str(seq.seq)[:min_length]
-            # Create a new SeqRecord with a shortened identifier
             short_id = seq.id.split('.')[0]  # Take only the first part of the identifier
             record = SeqRecord(
                 Seq(seq_str),
@@ -248,14 +246,21 @@ def create_phylogenetic_tree(query_sequence, similar_sequences):
         dm = calculator.get_distance(alignment)
         
         # Create tree constructor and build tree
-        constructor = DistanceTreeConstructor(calculator)  # Pass the calculator here
+        constructor = DistanceTreeConstructor(calculator)
         tree = constructor.build_tree(alignment)
         
-        # Draw the tree
-        fig, ax = plt.subplots(figsize=(15, 10))
+        # Draw the tree with improved formatting
+        fig, ax = plt.subplots(figsize=(20, 15))  # Increase figure size for better readability
         Phylo.draw(tree, axes=ax, show_confidence=False)
-        plt.title("Phylogenetic Tree of Related Viral Sequences")
         
+        # Improve title and labels formatting
+        plt.title("Phylogenetic Tree of Related Viral Sequences", fontsize=20)  # Larger title font size
+        ax.tick_params(axis='x', labelsize=12)  # Increase x-axis label size
+        ax.tick_params(axis='y', labelsize=12)  # Increase y-axis label size
+        
+        # Adjust layout to prevent overlapping text
+        plt.tight_layout()
+
         return fig, alignment
     
     except Exception as e:
@@ -266,6 +271,7 @@ def drug_repurposing(container):
     """Complete drug repurposing function with error handling and persistent updates"""
     try:
         # Step 1: Initial Data Loading
+        time.sleep(5)
         container.info("Step 1/8: Loading related viruses and viral targets...")
         COV_disease_list = [
             'Disease::SARS-CoV2 E',
@@ -716,7 +722,7 @@ def main():
                         status_placeholder.empty()
                         
                         # Display results
-                        st.success(f"Found {len(similar_sequences)} closely related viral sequences")
+                        st.success(f"Found closely related viral sequences")
                         
                         # Create results tabs
                         tab1, tab2, tab3, tab4 = st.tabs([
@@ -963,7 +969,7 @@ def main():
                             
                             # Default styles for chains and heteroatoms
                             view.setStyle({'chain': ['A', 'C', 'D', 'P', 'T']}, 
-                                        {'cartoon': {'color': 'lightgrey', 'opacity': 0.5}})
+                                        {'cartoon': {'color': 'grey', 'opacity': 0.75}})
                             view.setStyle({'hetflag': True}, {'stick': {'colorscheme': 'orangeCarbon'}})
                             
                             # Zoom settings
@@ -1119,7 +1125,6 @@ def main():
             - Identification of closely related viral sequences
             - Gene annotation analysis and visualization
             - Drug repurposing analysis
-            - Detailed sequence statistics
         """)
 
 if __name__ == "__main__":
