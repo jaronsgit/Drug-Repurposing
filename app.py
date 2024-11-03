@@ -666,7 +666,7 @@ def main():
         
     with col2:
         st.subheader("Paste FASTA Sequence")
-        pasted_sequence = st.text_area("Paste your FASTA sequence here", height=200)
+        pasted_sequence = st.text_area("Paste your FASTA sequence here", height=70)
 
     # Process input
     sequence_data = None
