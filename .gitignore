@@ -165,3 +165,4 @@ embed
 *.tsv
 ._embed
 cache/
+samba_key.txt
