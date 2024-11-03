@@ -641,8 +641,24 @@ def main():
     if debug_mode:
         st.sidebar.info("Debug Mode: Using cached BLAST results when available")
 
-    # Input methods
-    col1, col2 = st.columns(2)
+    # NEW: Create a container for consistent styling
+    input_container = st.container()
+    
+    # CHANGED: Use container's columns instead of direct st.columns
+    col1, col2 = input_container.columns(2)
+    
+    # new boxes
+    box_style = """
+    <style>
+        .stFileUploader > div > div > div {
+            min-height: 200px;
+        }
+        .uploadedFile {
+            height: 200px;
+        }
+    </style>
+    """
+    st.markdown(box_style, unsafe_allow_html=True)
     
     with col1:
         st.subheader("Upload FASTA File")
