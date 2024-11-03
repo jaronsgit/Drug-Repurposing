@@ -506,7 +506,7 @@ def drug_repurposing(container):
             'Disease::MESH:D058957',
             'Disease::MESH:D006517'
         ]
-        time.sleep(2.3)
+        time.sleep(7.3)
         # Step 2: Drug Database Loading
         container.info("Step 2/8: Loading drug database and treatment relationships...")
         drug_list = []
@@ -519,7 +519,7 @@ def drug_repurposing(container):
             raise Exception(f"Error loading drug database: {str(e)}")
 
         treatment = ['Hetionet::CtD::Compound:Disease','GNBR::T::Compound:Disease']
-        time.sleep(1.6)
+        time.sleep(3.2)
         # Step 3: Entity Mapping
         container.info("Step 3/8: Loading and mapping drug-disease entity relationships...")
         entity_map = {}
@@ -536,7 +536,7 @@ def drug_repurposing(container):
             reader = csv.DictReader(csvfile, delimiter='\t', fieldnames=['name','id'])
             for row_val in reader:
                 relation_map[row_val['name']] = int(row_val['id'])
-        time.sleep(0.9)
+        time.sleep(1.8)
         # Step 4: ID Processing        
         container.info("Step 4/8: Processing drug and disease identifiers...")
         drug_ids = []
@@ -548,7 +548,7 @@ def drug_repurposing(container):
             disease_ids.append(entity_map[disease])
 
         treatment_rid = [relation_map[treat] for treat in treatment]
-        time.sleep(0.5)
+        time.sleep(1.1)
         # Step 5: Loading Neural Network Embeddings
         container.info("Step 5/8: Generating drug-disease entity embeddings...")
         entity_emb = np.load('./embed/DRKG_TransE_l2_entity.npy')
@@ -560,7 +560,7 @@ def drug_repurposing(container):
 
         drug_emb = th.tensor(entity_emb[drug_ids])
         treatment_embs = [th.tensor(rel_emb[rid]) for rid in treatment_rid]
-        time.sleep(5)
+        time.sleep(10)
         # Step 6: Computing Drug-Disease Relationships
         container.info("Step 6/8: Computing drug-disease relationship scores...")
         gamma = 12.0
@@ -577,7 +577,7 @@ def drug_repurposing(container):
                 score = fn.logsigmoid(transE_l2(drug_emb, treatment_emb, disease_emb))
                 scores_per_disease.append(score)
                 dids.append(drug_ids)
-        time.sleep(1)
+        time.sleep(2.3)
         # Step 7: Score Processing and Ranking
         container.info("Step 7/8: Ranking and prioritizing potential drug candidates...")
         scores = th.cat(scores_per_disease)
@@ -592,7 +592,7 @@ def drug_repurposing(container):
         topk_indices = np.sort(unique_indices)[:topk]
         proposed_dids = dids[topk_indices]
         proposed_scores = scores[topk_indices]
-        time.sleep(1)
+        time.sleep(2.1)
         # Step 8: Clinical Trial Analysis
         container.info("Step 8/8: Cross-referencing with clinical trial database...")
         clinical_drugs = []
@@ -1012,21 +1012,32 @@ def main():
                         "disease_names": "Diseases",
                         "max_phase": "Trial Phase",
                     })
-                    st.dataframe(display_df.set_index("Compound"))
-                    
-                    # Create compound selection using radio buttons instead of regular buttons
-                    st.write("Select a compound to view chemical properties:")
-                    selected = st.radio(
-                        "Choose compound",
-                        options=compounds,
-                        horizontal=True,
-                        label_visibility="collapsed"
-                    )
-                    
+
+                    radio_col, table_col = st.columns([0.01, 0.99])
+                    options = [" "*i for i in range(1, len(compounds)+1)]
+                    with radio_col:
+                        selected = st.radio(
+                            "Choose compound",
+                            options=options,
+                            label_visibility="collapsed"
+                        )
+                    with table_col:
+                        st.dataframe(display_df.set_index("Compound"), use_container_width=True)
+
+                    st.markdown("""
+                    <style>
+                    [role=radiogroup]{
+                        margin-top: 40px;
+                        gap: 0.7rem;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+
                     # Update session state when selection changes
-                    if selected and selected in compound_data:
-                        st.session_state.selected_compound = selected
-                        st.session_state.compound_smile = compound_data[selected]['smile']
+                    if selected:
+                        selected_compound = compounds[options.index(selected)]
+                        st.session_state.selected_compound = selected_compound
+                        st.session_state.compound_smile = compound_data[selected_compound]['smile']
                     
                     # Display chemical properties section if a compound is selected
                     if st.session_state.selected_compound:
@@ -1225,7 +1236,7 @@ def main():
         st.markdown("---")
         st.markdown("""
             ### About this tool
-            This tool provides comprehensive analysis of COVID-19 genomic data:
+            This tool provides comprehensive analysis of viral genomic data:
             - Sequence analysis and phylogenetic relationships
             - Identification of closely related viral sequences
             - Gene annotation analysis and visualization
