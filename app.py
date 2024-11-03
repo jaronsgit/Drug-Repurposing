@@ -13,43 +13,154 @@ import io
 import re
 import time
 import numpy as np
-
 import os
 import pickle
 from pathlib import Path
-
 import torch as th
 import torch.nn.functional as fn
 import csv
 from chembl import ChemblAPI
-
 import requests
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Draw
-import io
 import base64
-
 import hashlib
 import py3Dmol
 from stmol import showmol
+from openai import OpenAI
+from functools import wraps
+import html
+import uuid
+import json
 
+# Initialize session state for chat and analysis caching
+def init_session_state():
+    """Initialize all session state variables"""
+    if 'chat_messages' not in st.session_state:
+        st.session_state.chat_messages = []
+    
+    if 'chat_visible' not in st.session_state:
+        st.session_state.chat_visible = False
+        
+    if 'chat_client' not in st.session_state:
+        try:
+            key_file = open('samba_key.txt', 'r')
+            st.session_state.chat_client = OpenAI(
+                api_key=key_file.readline().rstrip(),
+                base_url="https://api.sambanova.ai/v1",
+            )
+            key_file.close()
+        except Exception as e:
+            st.error(f"Failed to initialize chat client: {str(e)}")
+    
+    if 'analysis_cache' not in st.session_state:
+        st.session_state.analysis_cache = {}
 
-from IPython.display import HTML
+# Caching decorator
+def prevent_rerun(func):
+    """Decorator to prevent function from rerunning"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        cache_key = f"cache_{func.__name__}_{str(args)}_{str(kwargs)}"
+        if cache_key not in st.session_state.analysis_cache:
+            st.session_state.analysis_cache[cache_key] = func(*args, **kwargs)
+        return st.session_state.analysis_cache[cache_key]
+    return wrapper
 
-from streamlit import components
-from streamlit.components.v1 import html as html_component
+# Chat interface functions
+def handle_chat_submit():
+    """Handle chat form submission"""
+    if st.session_state.chat_input and st.session_state.chat_input.strip():
+        user_message = st.session_state.chat_input.strip()
+        st.session_state.chat_messages.append({
+            "role": "user",
+            "content": user_message
+        })
+        
+        try:
+            response = st.session_state.chat_client.chat.completions.create(
+                model="Meta-Llama-3.1-70B-Instruct",
+                messages=[{"role": "user", "content": user_message}],
+                stream=False
+            )
+            
+            assistant_message = response.choices[0].message.content
+            st.session_state.chat_messages.append({
+                "role": "assistant",
+                "content": assistant_message
+            })
+            
+        except Exception as e:
+            st.error(f"Failed to generate response: {str(e)}")
+        
+        st.session_state.chat_input = ""
 
+def create_chat_interface():
+    """Create a chat interface using Streamlit components"""
+    st.markdown("""
+        <style>
+            .chat-message {
+                padding: 10px;
+                margin: 5px 0;
+                border-radius: 5px;
+            }
+            .user-message {
+                background-color: #e6f3ff;
+                margin-left: 20%;
+            }
+            .assistant-message {
+                background-color: #f0f0f0;
+                margin-right: 20%;
+            }
+            .chat-container {
+                max-height: 400px;
+                overflow-y: auto;
+                padding: 10px;
+            }
+            .chat-toggle {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 1001;
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
+    # Chat interface container
+    chat_container = st.sidebar.container()
+    
+    # Chat toggle in main interface
+    if st.sidebar.button("💬 Toggle Chat", key="chat_toggle"):
+        st.session_state.chat_visible = not st.session_state.chat_visible
+        st.rerun()  # Changed from experimental_rerun() to rerun()
+    
+    if st.session_state.chat_visible:
+        with chat_container:
+            st.markdown("### SeqCure Assistant")
+            
+            # Display chat messages
+            for msg in st.session_state.chat_messages:
+                msg_class = "user-message" if msg["role"] == "user" else "assistant-message"
+                st.markdown(
+                    f"""<div class="chat-message {msg_class}">
+                        {html.escape(msg["content"])}
+                    </div>""", 
+                    unsafe_allow_html=True
+                )
+            
+            # Chat input form
+            with st.form(key="chat_form", clear_on_submit=True):
+                st.text_input("Message", key="chat_input")
+                submit_button = st.form_submit_button("Send", on_click=handle_chat_submit)
 
+# Existing helper functions with @prevent_rerun decorator where appropriate
+@prevent_rerun
 def get_sequence_hash(sequence):
-    """Create a deterministic hash of the sequence"""
-    # Convert sequence to string if it isn't already
     sequence_str = str(sequence)
-    # Create MD5 hash of the sequence
     return hashlib.md5(sequence_str.encode('utf-8')).hexdigest()
 
+@prevent_rerun
 def calculate_nucleotide_freq(sequence):
-    """Calculate nucleotide frequencies in the sequence"""
     total = len(sequence)
     frequencies = {
         'A': sequence.count('A') / total * 100,
@@ -59,14 +170,13 @@ def calculate_nucleotide_freq(sequence):
     }
     return frequencies
 
+@prevent_rerun
 def gc_content(sequence):
-    """Calculate GC content percentage"""
     gc = sequence.count('G') + sequence.count('C')
     total = len(sequence)
     return (gc / total) * 100
 
 def validate_fasta(fasta_str):
-    """Validate if the input is in FASTA format"""
     try:
         with io.StringIO(fasta_str) as handle:
             record = next(SeqIO.parse(handle, "fasta"))
@@ -74,61 +184,45 @@ def validate_fasta(fasta_str):
     except:
         return False
 
+@prevent_rerun
 def perform_filtered_blast_search(sequence):
-    """
-    Perform BLAST search with caching for faster development
-    """
-    placeholder = st.empty()
-
-    # Define cache file path using deterministic hash
     cache_dir = Path("cache")
     sequence_hash = get_sequence_hash(sequence)
     cache_file = cache_dir / f"blast_results_{sequence_hash}.pkl"
     
     try:
-        # Create cache directory if it doesn't exist
         cache_dir.mkdir(exist_ok=True)
         
-        # Check if cached results exist
         if cache_file.exists():
-            placeholder.info("Loading BLAST results from cache...")
-            time.sleep(1)
+            st.info("Loading BLAST results from cache...")
             with open(cache_file, 'rb') as f:
-                placeholder.empty()
                 return pickle.load(f)
         
-        # If no cache, perform BLAST search
-        placeholder.info("No cached results found. Performing BLAST search...")
-        # Search against nr database, exclude SARS-CoV-2 (taxid:2697049)
+        st.info("No cached results found. Performing BLAST search...")
         entrez_query = "txid10239[Organism:exp] NOT txid2697049[Organism]"
         result_handle = NCBIWWW.qblast(
             "blastn", 
             "nt", 
             sequence,
             entrez_query=entrez_query,
-            hitlist_size=10,  # Limit to top 10 hits
-            expect=1e-50  # Strict E-value threshold for close relatives
+            hitlist_size=10,
+            expect=1e-50
         )
         
-        # Cache the results
-        placeholder.info("Caching BLAST results for future use...")
-        # Convert BLAST results to string for storage
         result_text = result_handle.read()
         with open(cache_file, 'wb') as f:
             pickle.dump(result_text, f)
         
-        placeholder.empty()
-        # Create a StringIO object to make it compatible with BLAST XML parser
         return io.StringIO(result_text)
         
     except Exception as e:
-        placeholder.empty()
         st.error(f"BLAST search failed: {str(e)}")
         return None
 
+
+@prevent_rerun
 def extract_sequences_from_blast(blast_results):
     """Extract sequences from BLAST results with metadata including species names"""
-    # If blast_results is a string (from cache), convert to StringIO
     if isinstance(blast_results, str):
         blast_results = io.StringIO(blast_results)
     
@@ -139,9 +233,8 @@ def extract_sequences_from_blast(blast_results):
     
     for record in blast_records:
         for alignment in record.alignments:
-            # Extract accession and check E-value
             for hsp in alignment.hsps:
-                if hsp.expect > 1e-50:  # Skip if E-value is too high
+                if hsp.expect > 1e-50:
                     continue
                     
                 accession = alignment.title.split('|')[1]
@@ -149,17 +242,13 @@ def extract_sequences_from_blast(blast_results):
                     seen_accessions.add(accession)
                     try:
                         Entrez.email = "your_email@example.com"  # Replace with your email
-                        # Fetch sequence and organism information
                         handle = Entrez.efetch(db="nucleotide", id=accession, rettype="gb", retmode="text")
                         record = next(SeqIO.parse(handle, "genbank"))
                         handle.close()
                         
-                        # Extract organism name from the record
                         organism_name = record.annotations.get('organism', 'Unknown species')
-                        # Extract alignment score
                         alignment_score = hsp.score
                         
-                        # Get sequence in FASTA format
                         handle_fasta = Entrez.efetch(db="nucleotide", id=accession, rettype="fasta", retmode="text")
                         seq_record = next(SeqIO.parse(handle_fasta, "fasta"))
                         handle_fasta.close()
@@ -178,30 +267,25 @@ def extract_sequences_from_blast(blast_results):
     
     return sequences, metadata
 
-# Update the Entrez caching function to use deterministic hashing as well
+@prevent_rerun
 def cache_entrez_fetch(db, id_val, rettype, retmode, cache_dir="cache"):
     """Helper function to cache Entrez fetch results"""
     cache_dir = Path(cache_dir)
-    # Create deterministic hash of the parameters
     params_str = f"{db}_{id_val}_{rettype}_{retmode}"
     params_hash = hashlib.md5(params_str.encode('utf-8')).hexdigest()
     cache_file = cache_dir / f"entrez_{params_hash}.pkl"
     
     try:
-        # Create cache directory if it doesn't exist
         cache_dir.mkdir(exist_ok=True)
         
-        # Check if cached results exist
         if cache_file.exists():
             with open(cache_file, 'rb') as f:
                 return pickle.load(f)
         
-        # If no cache, fetch from Entrez
         handle = Entrez.efetch(db=db, id=id_val, rettype=rettype, retmode=retmode)
         result = handle.read()
         handle.close()
         
-        # Cache the results
         with open(cache_file, 'wb') as f:
             pickle.dump(result, f)
         
@@ -211,104 +295,41 @@ def cache_entrez_fetch(db, id_val, rettype, retmode, cache_dir="cache"):
         st.warning(f"Could not fetch/cache Entrez results for {id_val}: {str(e)}")
         return None
 
+@prevent_rerun
 def get_top_unique_species(metadata, n=5):
     """Get top n unique species based on alignment score"""
-    # Convert metadata to DataFrame
     df = pd.DataFrame(metadata)
-    
-    # Get the highest score for each species
     top_species = (df.sort_values('identity', ascending=False)
                     .drop_duplicates(subset=['species'])
                     .head(n))
-    
     return top_species[['species', 'identity']]
-    
-#def create_phylogenetic_tree(query_sequence, similar_sequences):
-#    """Create phylogenetic tree using Biopython's built-in tools with improved formatting."""
-#    try:
-        # Prepare sequences for alignment
-#        sequences = [query_sequence] + similar_sequences
-        
-        # Create an empty alignment
-#        alignment = MultipleSeqAlignment([])
-        
-        # Find the length of the shortest sequence
-#        min_length = min(len(s.seq) for s in sequences)
-        
-        # Add sequences to alignment, truncating to the shortest length
-#        for seq in sequences:
-#            seq_str = str(seq.seq)[:min_length]
-#            short_id = seq.id.split('.')[0]  # Take only the first part of the identifier
-#            record = SeqRecord(
-#                Seq(seq_str),
-#                id=short_id[:10],  # Limit ID length to prevent formatting issues
-#                name=short_id[:10],
-#                description=""
-#            )
-#            alignment.append(record)
 
-        # Calculate distance matrix
-#        calculator = DistanceCalculator('identity')
-#        dm = calculator.get_distance(alignment)
-        
-        # Create tree constructor and build tree
-#        constructor = DistanceTreeConstructor(calculator)
-#        tree = constructor.build_tree(alignment)
-        
-        # Draw the tree with improved formatting
-#        fig, ax = plt.subplots(figsize=(20, 15))  # Increase figure size for better readability
-#        Phylo.draw(tree, axes=ax, show_confidence=False)
-        
-        # Improve title and labels formatting
-#        plt.title("Phylogenetic Tree of Related Viral Sequences", fontsize=20)  # Larger title font size
-#        ax.tick_params(axis='x', labelsize=12)  # Increase x-axis label size
-#        ax.tick_params(axis='y', labelsize=12)  # Increase y-axis label size
-        
-        # Adjust layout to prevent overlapping text
-#        plt.tight_layout()
-
-#        return fig, alignment
-#    
-#    except Exception as e:
-#        st.error(f"Error creating phylogenetic tree: {str(e)}")
-#        return None, None
-    
+@prevent_rerun
 def create_phylogenetic_tree(query_sequence, similar_sequences):
-    """Create phylogenetic tree using Biopython's built-in tools with enhanced formatting."""
+    """Create phylogenetic tree using Biopython's built-in tools"""
     try:
-        # Prepare sequences for alignment
         sequences = [query_sequence] + similar_sequences
-        
-        # Create an empty alignment
         alignment = MultipleSeqAlignment([])
-        
-        # Find the length of the shortest sequence
         min_length = min(len(s.seq) for s in sequences)
         
-        # Add sequences to alignment, truncating to the shortest length
         for seq in sequences:
             seq_str = str(seq.seq)[:min_length]
-            short_id = seq.id.split('.')[0]  # Take only the first part of the identifier
+            short_id = seq.id.split('.')[0]
             record = SeqRecord(
                 Seq(seq_str),
-                id=short_id[:15],  # Increased ID length limit
+                id=short_id[:15],
                 name=short_id[:15],
                 description=""
             )
             alignment.append(record)
 
-        # Calculate distance matrix
         calculator = DistanceCalculator('identity')
         dm = calculator.get_distance(alignment)
         
-        # Create tree constructor and build tree
         constructor = DistanceTreeConstructor(calculator)
         tree = constructor.build_tree(alignment)
         
-        # Create figure with larger size
-        fig, ax = plt.subplots(figsize=(24, 18))  # Increased figure size
-        
-        # Draw the tree with custom parameters
+        fig, ax = plt.subplots(figsize=(24, 18))
         Phylo.draw(tree, axes=ax, show_confidence=False, 
                   label_func=lambda x: x.name,  # Use the full name as label
                   do_show=False)  # Prevent automatic display
@@ -338,15 +359,116 @@ def create_phylogenetic_tree(query_sequence, similar_sequences):
         
         return fig, alignment
     
+    
     except Exception as e:
         st.error(f"Error creating phylogenetic tree: {str(e)}")
         return None, None
 
+@prevent_rerun
+def extract_genes_from_gtf(gtf_file, status_placeholder, progress_bar):
+    """Extract genes from GTF file with visual progress updates"""
+    status_placeholder.write("Running gene finder...")
+    progress_bar.progress(20)
+    time.sleep(1)
+    
+    columns = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"]
+    gtf_data = pd.read_csv(gtf_file, sep="\t", comment='#', header=None, names=columns)
+    
+    status_placeholder.write("Extracting gene information...")
+    progress_bar.progress(50)
+    time.sleep(1)
+    
+    genes_data = gtf_data[gtf_data['feature'] == 'gene']
+
+    genes = []
+    for attr in genes_data['attribute']:
+        for field in attr.split(';'):
+            if 'gene_name' in field:
+                gene_name = field.split('"')[1]
+                genes.append(gene_name)
+                break
+    
+    progress_bar.progress(80)
+    status_placeholder.write("Found closely related viral genes.")
+    return genes
+
+@prevent_rerun
+def display_image(image_file, status_placeholder, progress_bar):
+    """Display image with visual progress updates"""
+    status_placeholder.write("Loading image...")
+    progress_bar.progress(85)
+    time.sleep(1)
+    
+    img = plt.imread(image_file)
+    
+    status_placeholder.write("Displaying image...")
+    progress_bar.progress(90)
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.imshow(img)
+    ax.axis('off')
+    return fig
+
+@st.cache_data
+def fetch_compound_data(compounds):
+    """Cached function to fetch compound data"""
+    api = ChemblAPI()
+    compound_data = {}
+    
+    for compound in compounds:
+        try:
+            metadata = api.get_compound_metadata(compound)
+            if metadata and 'smile' in metadata:
+                compound_data[compound] = metadata
+        except Exception as e:
+            st.warning(f"Could not fetch data for {compound}: {str(e)}")
+    
+    return compound_data
+
+@st.cache_data
+def get_cached_chemical_properties(smiles):
+    """Cached function to calculate chemical properties"""
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        
+        properties = {
+            'Molecular Weight': round(Descriptors.ExactMolWt(mol), 2),
+            'MolLogP': round(Descriptors.MolLogP(mol), 2),
+            'H-Bond Donors': Descriptors.NumHDonors(mol),
+            'H-Bond Acceptors': Descriptors.NumHAcceptors(mol),
+            'Rotatable Bonds': Descriptors.NumRotatableBonds(mol),
+            'Topological Polar Surface Area': round(Descriptors.TPSA(mol), 2),
+            'Number of Rings': Descriptors.RingCount(mol)
+        }
+        return properties
+    except Exception as e:
+        st.error(f"Error calculating properties: {str(e)}")
+        return None
+
+@st.cache_data
+def get_cached_molecule_image(smiles):
+    """Cached function to generate molecule image"""
+    try:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            return None
+        
+        img = Draw.MolToImage(mol)
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        return img_str
+    except Exception as e:
+        st.error(f"Error generating molecule image: {str(e)}")
+        return None
+
+@prevent_rerun
 def drug_repurposing(container):
     """Complete drug repurposing function with error handling and persistent updates"""
     try:
         # Step 1: Initial Data Loading
-        time.sleep(5)
         container.info("Step 1/8: Loading related viruses and viral targets...")
         COV_disease_list = [
             'Disease::SARS-CoV2 E',
@@ -515,153 +637,7 @@ def drug_repurposing(container):
         container.error(f"Detailed error in drug repurposing:\n{traceback.format_exc()}")
         raise
 
-
-def extract_genes_from_gtf(gtf_file, status_placeholder, progress_bar):
-    """Extract genes from GTF file with visual progress updates"""
-    status_placeholder.write("Running gene finder...")
-    progress_bar.progress(20)
-    time.sleep(1)
-    
-    columns = ["seqname", "source", "feature", "start", "end", "score", "strand", "frame", "attribute"]
-    gtf_data = pd.read_csv(gtf_file, sep="\t", comment='#', header=None, names=columns)
-    
-    status_placeholder.write("Extracting gene information...")
-    progress_bar.progress(50)
-    time.sleep(1)
-    
-    genes_data = gtf_data[gtf_data['feature'] == 'gene']
-
-    genes = []
-    for attr in genes_data['attribute']:
-        for field in attr.split(';'):
-            if 'gene_name' in field:
-                gene_name = field.split('"')[1]
-                genes.append(gene_name)
-                break
-    
-    progress_bar.progress(80)
-    status_placeholder.write("Found closely related viral genes.")
-    return genes
-
-def display_image(image_file, status_placeholder, progress_bar):
-    """Display image with visual progress updates"""
-    status_placeholder.write("Loading image...")
-    progress_bar.progress(85)
-    time.sleep(1)
-    
-    img = plt.imread(image_file)
-    
-    status_placeholder.write("Displaying image...")
-    progress_bar.progress(90)
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.imshow(img)
-    ax.axis('off')
-    return fig
-
-@st.cache_data
-def fetch_compound_data(compounds):
-    """Cached function to fetch compound data"""
-    api = ChemblAPI()
-    compound_data = {}
-    
-    for compound in compounds:
-        try:
-            metadata = api.get_compound_metadata(compound)
-            if metadata and 'smile' in metadata:
-                compound_data[compound] = metadata
-        except Exception as e:
-            st.warning(f"Could not fetch data for {compound}: {str(e)}")
-    
-    return compound_data
-
-@st.cache_data
-def get_cached_chemical_properties(smiles):
-    """Cached function to calculate chemical properties"""
-    try:
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is None:
-            return None
-        
-        properties = {
-            'Molecular Weight': round(Descriptors.ExactMolWt(mol), 2),
-            'MolLogP': round(Descriptors.MolLogP(mol), 2),
-            'H-Bond Donors': Descriptors.NumHDonors(mol),
-            'H-Bond Acceptors': Descriptors.NumHAcceptors(mol),
-            'Rotatable Bonds': Descriptors.NumRotatableBonds(mol),
-            'Topological Polar Surface Area': round(Descriptors.TPSA(mol), 2),
-            'Number of Rings': Descriptors.RingCount(mol)
-        }
-        return properties
-    except Exception as e:
-        st.error(f"Error calculating properties: {str(e)}")
-        return None
-
-@st.cache_data
-def get_cached_molecule_image(smiles):
-    """Cached function to generate molecule image"""
-    try:
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is None:
-            return None
-        
-        img = Draw.MolToImage(mol, size=(600, 600))
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        img_str = base64.b64encode(buffered.getvalue()).decode()
-        return img_str
-    except Exception as e:
-        st.error(f"Error generating molecule image: {str(e)}")
-        return None
-    
-def get_chemical_properties(smiles):
-    """Calculate chemical properties for a given SMILES string"""
-    try:
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is None:
-            return None
-        
-        properties = {
-            'Molecular Weight': round(Descriptors.ExactMolWt(mol), 2),
-            'LogP': round(Descriptors.MolLogP(mol), 2),
-            'H-Bond Donors': Descriptors.NumHDonors(mol),
-            'H-Bond Acceptors': Descriptors.NumHAcceptors(mol),
-            'Rotatable Bonds': Descriptors.NumRotatableBonds(mol),
-            'Topological Polar Surface Area': round(Descriptors.TPSA(mol), 2),
-            'Number of Rings': Descriptors.RingCount(mol)
-        }
-        return properties
-    except Exception as e:
-        st.error(f"Error calculating properties: {str(e)}")
-        return None
-
-# Add this function to create a 2D structure image
-def get_molecule_image(smiles):
-    """Generate a 2D structure image from SMILES"""
-    try:
-        mol = Chem.MolFromSmiles(smiles)
-        if mol is None:
-            return None
-        
-        img = Draw.MolToImage(mol)
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        img_str = base64.b64encode(buffered.getvalue()).decode()
-        return img_str
-    except Exception as e:
-        st.error(f"Error generating molecule image: {str(e)}")
-        return None
-    
-def render_mol(pdb):
-    """Create a py3Dmol viewer with custom styling"""
-    view = py3Dmol.view(width=800, height=500)
-    view.addModel(pdb, "pdb")
-    view.setStyle({'cartoon': {'color': 'spectrum'}})
-    view.setBackgroundColor('white')
-    view.zoomTo()
-    return view
-
-@st.cache_data
+@prevent_rerun
 def get_protein_structure_viewer(pdb_id):
     """Create a py3Dmol viewer for the protein structure"""
     try:
@@ -669,25 +645,20 @@ def get_protein_structure_viewer(pdb_id):
         if not os.path.exists(pdb_file):
             return None, f"Error: File {pdb_file} not found."
         
-        # Create viewer
         viewer = py3Dmol.view(width=800, height=600)
         
-        # Read PDB content
         with open(pdb_file, 'r') as pdb:
             pdb_content = pdb.read()
         
-        # Add model and set styles
         viewer.addModel(pdb_content, 'pdb')
         viewer.setStyle({'chain': ['A', 'C', 'D', 'P', 'T']}, 
                        {'cartoon': {'color': 'lightgrey', 'opacity': 0.5}})
         viewer.setStyle({'hetflag': True}, 
                        {'stick': {'colorscheme': 'orangeCarbon'}})
         
-        # Set view
         viewer.zoomTo({'hetflag': True})
         viewer.zoom(0.5)
         
-        # Convert the viewer to HTML
         html_str = f"""
         <div style="height: 600px; width: 100%;">
             <script src="https://3dmol.org/build/3Dmol-min.js"></script>
@@ -703,53 +674,112 @@ def get_protein_structure_viewer(pdb_id):
     except Exception as e:
         return None, f"Error rendering protein structure: {str(e)}"
 
-# Add this mapping of compounds to PDB IDs
-COMPOUND_PDB_MAPPING = {
-    "Remdesivir": "7l1f",
-    "Ribavirin": "7l1f",  # You should replace with actual PDB IDs
-    "Dexamethasone": "7l1f",
-    "Colchicine": "7l1f",
-    "Methylprednisolone": "7l1f",
-    "Oseltamivir": "7l1f"
-}
+def render_mol(pdb):
+    """Create a py3Dmol viewer with custom styling"""
+    view = py3Dmol.view(width=800, height=500)
+    view.addModel(pdb, "pdb")
+    view.setStyle({'cartoon': {'color': 'spectrum'}})
+    view.setBackgroundColor('white')
+    view.zoomTo()
+    return view
+
+
+@prevent_rerun
+def run_sequence_analysis(sequence_data):
+    """Wrapper for sequence analysis section"""
+    results = {}
+    
+    try:
+        # Basic sequence analysis
+        results['frequencies'] = calculate_nucleotide_freq(str(sequence_data.seq))
+        results['gc_content'] = gc_content(str(sequence_data.seq))
+        
+        # BLAST analysis
+        blast_results = perform_filtered_blast_search(str(sequence_data.seq))
+        if blast_results:
+            similar_sequences, metadata = extract_sequences_from_blast(blast_results)
+            if similar_sequences:
+                results['similar_sequences'] = similar_sequences
+                results['metadata'] = metadata
+                results['tree'], results['alignment'] = create_phylogenetic_tree(
+                    sequence_data, 
+                    similar_sequences
+                )
+    except Exception as e:
+        st.error(f"Error in sequence analysis: {str(e)}")
+        return None
+        
+    return results
+
+@prevent_rerun
+def run_gene_analysis(gtf_file='Sars_cov_2.ASM985889v3.101.gtf'):
+    """Wrapper for gene analysis section"""
+    try:
+        genes = extract_genes_from_gtf(gtf_file)
+        return {'genes': genes}
+    except Exception as e:
+        st.error(f"Error in gene analysis: {str(e)}")
+        return None
+
+@prevent_rerun
+def run_drug_analysis():
+    """Wrapper for drug repurposing analysis"""
+    try:
+        results, clinical_results = drug_repurposing(st)
+        return {
+            'results': results,
+            'clinical_results': clinical_results
+        }
+    except Exception as e:
+        st.error(f"Error in drug analysis: {str(e)}")
+        return None
+    
+def chat_endpoint():
+    try:
+        data = json.loads(st.query_params.get('data', '{}'))
+        messages = data.get('messages', [])
+        model = data.get('model', "Meta-Llama-3.1-70B-Instruct")
+        
+        response = st.session_state.chat_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=False
+        )
+        
+        return {"content": response.choices[0].message.content}
+    except Exception as e:
+        return {"error": str(e)}, 500
 
 def main():
-    st.title("SeqCure")
-    st.write("Upload or paste a FASTA file containing a viral genome sequence")
-
-    # Add debug mode checkbox
-    debug_mode = st.sidebar.checkbox("Debug Mode", value=True)
-    if debug_mode:
-        st.sidebar.info("Debug Mode: Using cached BLAST results when available")
-
-    # NEW: Create a container for consistent styling
-    input_container = st.container()
+    # Initialize session state
+    init_session_state()
     
-    # CHANGED: Use container's columns instead of direct st.columns
-    col1, col2 = input_container.columns(2)
+    # Set page config
+    st.set_page_config(
+        page_title="SeqCure",
+        page_icon="🧬",
+        layout="wide"
+    )
     
-    # new boxes
-    box_style = """
-    <style>
-        .stFileUploader > div > div > div {
-            min-height: 200px;
-        }
-        .uploadedFile {
-            height: 200px;
-        }
-    </style>
-    """
-    st.markdown(box_style, unsafe_allow_html=True)
+    # Create main content container
+    main_content = st.container()
     
-    with col1:
-        st.subheader("Upload FASTA File")
-        uploaded_file = st.file_uploader("Choose a FASTA file", type=['fasta', 'fa'])
+    # Check if we're handling a chat endpoint
+    if 'endpoint' in st.query_params and st.query_params['endpoint'] == 'chat':
+        return chat_endpoint()
+    
+    with main_content:
+        st.title("SeqCure")
+        st.write("Upload or paste a FASTA file containing a viral genome sequence")
         
-    with col2:
-        st.subheader("Paste FASTA Sequence")
-        pasted_sequence = st.text_area("Paste your FASTA sequence here", height=70)
-
-    # Process input
+        # Add file upload and sequence input
+        col1, col2 = st.columns(2)
+        with col1:
+            uploaded_file = st.file_uploader("Choose a FASTA file", type=['fasta', 'fa'])
+        with col2:
+            pasted_sequence = st.text_area("Paste your FASTA sequence here", height=70)
+        
+        # Process input
     sequence_data = None
     fasta_analysis_complete = False
     
@@ -797,7 +827,7 @@ def main():
                         status_placeholder.empty()
                         
                         # Display results
-                        st.success(f"Found closely related viral sequences")
+                        st.success(f"Found {len(similar_sequences)} closely related viral sequences")
                         
                         # Create results tabs
                         tab1, tab2, tab3, tab4 = st.tabs([
@@ -1018,11 +1048,8 @@ def main():
                             # Display 2D structure using cached function
                             img_str = get_cached_molecule_image(st.session_state.compound_smile)
                             if img_str:
-                                st.image(
-                                    f"data:image/png;base64,{img_str}", 
-                                    caption="2D Structure", 
-                                    use_column_width=True
-                                )
+                                st.image(f"data:image/png;base64,{img_str}", 
+                                       caption="2D Structure")
                             else:
                                 st.error("Could not generate molecular structure")
                         
@@ -1180,13 +1207,13 @@ def main():
                         except Exception as e:
                             st.error(f"Error loading patent data: {str(e)}")
                             import traceback
-                            st.code(traceback.format_exc(), language="python")
+                            st.code(traceback.format_exc(), language="python")                        
                 
                 except Exception as e:
                     st.error(f"Error in drug information section: {str(e)}")
                     import traceback
                     st.code(traceback.format_exc(), language="python")
-            
+
             except Exception as e:
                 import traceback
                 st.error("An error occurred during drug analysis. Details:")
@@ -1203,7 +1230,10 @@ def main():
             - Identification of closely related viral sequences
             - Gene annotation analysis and visualization
             - Drug repurposing analysis
+            - Detailed sequence statistics
         """)
+    # Add chat interface
+    create_chat_interface()
 
 if __name__ == "__main__":
     main()
